@@ -1,0 +1,46 @@
+{
+  "key": "agile",
+  "label": "Agile (Scrum)",
+  "template_version": 1,
+  "item_kinds": ["epic", "feature", "story", "task", "bug", "test_case"],
+  "hierarchy_rules": [
+    { "parent": "epic", "child": "feature" },
+    { "parent": "epic", "child": "story" },
+    { "parent": "feature", "child": "story" },
+    { "parent": "story", "child": "task" },
+    { "parent": "story", "child": "bug" },
+    { "parent": "story", "child": "test_case" },
+    { "parent": "feature", "child": "bug" }
+  ],
+  "states": [
+    { "key": "backlog", "label": "Backlog", "category": "todo", "sort_order": 0 },
+    { "key": "ready", "label": "Ready", "category": "todo", "sort_order": 1 },
+    { "key": "in_progress", "label": "In progress", "category": "in_progress", "sort_order": 2 },
+    { "key": "in_review", "label": "In review", "category": "in_progress", "sort_order": 3 },
+    { "key": "qa", "label": "QA", "category": "in_progress", "sort_order": 4 },
+    { "key": "done", "label": "Done", "category": "done", "sort_order": 5 },
+    { "key": "cancelled", "label": "Cancelled", "category": "done", "sort_order": 6 }
+  ],
+  "transitions": [
+    { "from": "backlog", "to": "ready" },
+    { "from": "ready", "to": "backlog" },
+    { "from": "ready", "to": "in_progress" },
+    { "from": "in_progress", "to": "in_review" },
+    { "from": "in_review", "to": "in_progress" },
+    { "from": "in_review", "to": "qa" },
+    { "from": "qa", "to": "in_progress" },
+    { "from": "qa", "to": "done", "required_role": "qa", "is_hard_gate": false },
+    { "from": "*", "to": "cancelled" },
+    { "from": "cancelled", "to": "backlog" }
+  ],
+  "defaults": {
+    "estimation_mode": "story_points",
+    "sprint_length_days": 14,
+    "definition_of_done_md": "- Acceptance criteria verified\n- Code reviewed and merged\n- Test cases passing\n- No open blocking bugs"
+  },
+  "notes": {
+    "wildcard_from": "The engine expands \"from\": \"*\" to a transition from every non-terminal state.",
+    "seeding": "At project creation, states and transitions are copied into workflow_states / workflow_transitions and hierarchy_rules — the template is a starting point, editable per project afterward.",
+    "qa_gate": "The qa -> done transition requires the QA role but is a soft gate in Agile; Waterfall's template (v1.1) will set is_hard_gate: true on phase-exit transitions, requiring an approved milestone."
+  }
+}

@@ -1,0 +1,36 @@
+# LiteLLM gateway config. Concrete model bindings arrive in M1.T3 alongside the
+# Architect and QA agents. This scaffold declares tiers and defaults only.
+
+general_settings:
+  telemetry: false                       # NFR-5.5.2, feedback_no_phone_home
+  master_key: ${LITELLM_MASTER_KEY:-sk-krititva-local}
+
+# Model tiers referenced by RoleProfile.model_tier.
+# Adjust the concrete `model` values to what the operator has pulled locally.
+model_list:
+  - model_name: krititva-frontier
+    litellm_params:
+      model: ollama/qwen2.5:32b-instruct
+      api_base: http://host.docker.internal:11434
+
+  - model_name: krititva-mid
+    litellm_params:
+      model: ollama/qwen2.5:7b-instruct
+      api_base: http://host.docker.internal:11434
+
+  - model_name: krititva-fast
+    litellm_params:
+      model: ollama/llama3.2:3b-instruct
+      api_base: http://host.docker.internal:11434
+
+  - model_name: krititva-embed
+    litellm_params:
+      model: ollama/nomic-embed-text:v1.5
+      api_base: http://host.docker.internal:11434
+
+router_settings:
+  routing_strategy: simple-shuffle
+
+litellm_settings:
+  drop_params: true                      # tolerate provider-specific extras
+  set_verbose: false

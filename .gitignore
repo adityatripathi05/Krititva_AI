@@ -1,0 +1,50 @@
+# Node / pnpm / Turborepo
+node_modules/
+.next/
+.turbo/
+.pnpm-store/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.eslintcache
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local data
+/data/
+/assets/
+/pgdata/
+/redisdata/
+
+# Generated
+apps/api/app/migrations/versions/*.py
+!apps/api/app/migrations/versions/.gitkeep
+packages/api-client/src/generated/

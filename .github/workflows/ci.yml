@@ -1,0 +1,146 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KRITITVA_TELEMETRY_ENABLED: "false"
+
+jobs:
+  # ================================================================
+  # Backend: lint + typecheck + unit tests
+  # ================================================================
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --extra dev --frozen
+
+      - name: ruff
+        run: uv run ruff check app tests
+
+      - name: ruff format check
+        run: uv run ruff format --check app tests
+
+      - name: mypy --strict
+        run: uv run mypy app
+
+      - name: pytest (unit)
+        run: uv run pytest -m "not integration and not smoke" --cov=app --cov-report=xml
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: apps/api/coverage.xml
+
+  # ================================================================
+  # Frontend: lint + typecheck + build
+  # ================================================================
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter @krititva/web lint
+
+      - name: Typecheck
+        run: pnpm --filter @krititva/web typecheck
+
+      - name: Build
+        run: pnpm --filter @krititva/web build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  # ================================================================
+  # Traceability: FR/NFR anchors are cited in code + tests
+  # (See .claude/skills/krititva-verify-traceability/SKILL.md)
+  # ================================================================
+  traceability:
+    name: traceability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract SRS universe
+        run: |
+          grep -oE '(FR|NFR|OR)-[0-9]+(\.[0-9]+){1,2}' docs/krititva-srs.md | sort -u > /tmp/kt-universe
+          echo "Universe size: $(wc -l < /tmp/kt-universe)"
+
+      - name: Extract implemented anchors
+        run: |
+          grep -orhE '(FR|NFR|OR)-[0-9]+(\.[0-9]+){1,2}' \
+            apps/api/app apps/api/tests apps/web docs/krititva-roadmap.md 2>/dev/null \
+            | sort -u > /tmp/kt-implemented
+          echo "Implemented size: $(wc -l < /tmp/kt-implemented)"
+
+      - name: Orphan check (cited anchors not defined in SRS)
+        run: |
+          orphans=$(comm -23 /tmp/kt-implemented /tmp/kt-universe)
+          if [ -n "$orphans" ]; then
+            echo "::error::Orphan anchors referenced but not defined in SRS:"
+            echo "$orphans"
+            exit 1
+          fi
+          echo "No orphans."
+
+      - name: Untraced (warning only during pre-M4)
+        run: |
+          untraced=$(comm -23 /tmp/kt-universe /tmp/kt-implemented)
+          if [ -n "$untraced" ]; then
+            echo "::warning::Requirements with no implementation reference (expected during pre-alpha):"
+            echo "$untraced" | head -50
+          fi
+
+  # ================================================================
+  # OpenAPI: diff apps/api/openapi.json against baseline
+  # Placeholder — activates when M1 lands the OpenAPI spec generation.
+  # ================================================================
+  openapi:
+    name: openapi diff (placeholder)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: |
+          echo "OpenAPI diff check activates in M1.T3 when the artifact endpoints ship."

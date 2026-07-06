@@ -1,0 +1,31 @@
+{
+  "methodology": "waterfall",
+  "description": "Phase → Deliverable → Task with hard gate at each phase closure. Default approval quorum: project_owner + client_approver. Adjust per project.",
+  "states": [
+    { "key": "not_started", "label": "Not Started", "category": "todo",        "sort_order": 0 },
+    { "key": "in_progress", "label": "In Progress", "category": "in_progress", "sort_order": 10 },
+    { "key": "gate_review", "label": "Gate Review", "category": "in_progress", "sort_order": 20 },
+    { "key": "rejected",    "label": "Rejected",    "category": "in_progress", "sort_order": 25 },
+    { "key": "done",        "label": "Done",        "category": "done",        "sort_order": 30 }
+  ],
+  "transitions": [
+    { "from": "not_started", "to": "in_progress" },
+    { "from": "in_progress", "to": "gate_review" },
+    { "from": "gate_review", "to": "in_progress" },
+    { "from": "gate_review", "to": "rejected"    },
+    { "from": "rejected",    "to": "in_progress" },
+    {
+      "from": "gate_review",
+      "to": "done",
+      "is_hard_gate": true,
+      "required_role": "project_owner",
+      "approval_quorum": { "project_owner": 1, "client_approver": 1 }
+    }
+  ],
+  "hierarchy": [
+    { "parent_kind": "phase",       "child_kind": "deliverable" },
+    { "parent_kind": "phase",       "child_kind": "task"        },
+    { "parent_kind": "deliverable", "child_kind": "task"        },
+    { "parent_kind": "deliverable", "child_kind": "test_case"   }
+  ]
+}

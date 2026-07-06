@@ -1,0 +1,21 @@
+{
+  "name": "@krititva/api-client",
+  "version": "0.1.0-alpha.0",
+  "description": "TypeScript client generated from the Krititva API OpenAPI spec. Populated by codegen in M1.T3; this scaffold ships a placeholder so workspace resolution succeeds.",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "echo 'Codegen wires up in M1.T3 alongside the artifacts endpoints.' && exit 0",
+    "lint": "echo 'placeholder' && exit 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

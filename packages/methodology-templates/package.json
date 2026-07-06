@@ -1,0 +1,18 @@
+{
+  "name": "@krititva/methodology-templates",
+  "version": "0.1.0-alpha.0",
+  "description": "Seed JSON for Agile / Waterfall / Hybrid methodology profiles. Applied to workflow_states, workflow_transitions, hierarchy_rules on project creation (FR-4.3).",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "main": "index.json",
+  "files": [
+    "*.json",
+    "schema.json"
+  ],
+  "exports": {
+    "./agile": "./agile.json",
+    "./waterfall": "./waterfall.json",
+    "./hybrid": "./hybrid.json",
+    "./schema": "./schema.json"
+  }
+}

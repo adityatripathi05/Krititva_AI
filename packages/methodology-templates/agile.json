@@ -1,0 +1,33 @@
+{
+  "methodology": "agile",
+  "description": "Epic → Feature → Story → Task with sprint-based flow. Bugs sit alongside stories. No hard gates by default; a project owner may add a release gate post-creation.",
+  "states": [
+    { "key": "backlog",     "label": "Backlog",     "category": "todo",        "sort_order": 0 },
+    { "key": "in_progress", "label": "In Progress", "category": "in_progress", "sort_order": 10 },
+    { "key": "in_review",   "label": "In Review",   "category": "in_progress", "sort_order": 20 },
+    { "key": "qa",          "label": "QA",          "category": "in_progress", "sort_order": 30 },
+    { "key": "blocked",     "label": "Blocked",     "category": "in_progress", "sort_order": 40 },
+    { "key": "done",        "label": "Done",        "category": "done",        "sort_order": 50 }
+  ],
+  "transitions": [
+    { "from": "backlog",     "to": "in_progress" },
+    { "from": "in_progress", "to": "in_review"   },
+    { "from": "in_progress", "to": "blocked"     },
+    { "from": "in_review",   "to": "in_progress" },
+    { "from": "in_review",   "to": "qa"          },
+    { "from": "qa",          "to": "in_progress" },
+    { "from": "qa",          "to": "done",         "required_role": "qa" },
+    { "from": "blocked",     "to": "in_progress" },
+    { "from": "blocked",     "to": "backlog"     },
+    { "from": "done",        "to": "in_progress" }
+  ],
+  "hierarchy": [
+    { "parent_kind": "epic",    "child_kind": "feature"   },
+    { "parent_kind": "epic",    "child_kind": "story"     },
+    { "parent_kind": "feature", "child_kind": "story"     },
+    { "parent_kind": "feature", "child_kind": "bug"       },
+    { "parent_kind": "story",   "child_kind": "task"      },
+    { "parent_kind": "story",   "child_kind": "bug"       },
+    { "parent_kind": "story",   "child_kind": "test_case" }
+  ]
+}

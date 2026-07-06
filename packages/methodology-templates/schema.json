@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://krititva.dev/schemas/methodology-template.json",
+  "title": "Methodology Template",
+  "description": "Applied to workflow_states, workflow_transitions, hierarchy_rules on project creation.",
+  "type": "object",
+  "required": ["methodology", "states", "transitions", "hierarchy"],
+  "additionalProperties": false,
+  "properties": {
+    "methodology": {
+      "type": "string",
+      "enum": ["agile", "waterfall", "hybrid"]
+    },
+    "description": {
+      "type": "string"
+    },
+    "states": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "category", "sort_order"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "label": { "type": "string" },
+          "category": { "type": "string", "enum": ["todo", "in_progress", "done"] },
+          "sort_order": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to"],
+        "additionalProperties": false,
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "required_role": {
+            "type": ["string", "null"],
+            "enum": [
+              "project_owner",
+              "scrum_master",
+              "developer",
+              "qa",
+              "viewer",
+              "client_approver",
+              null
+            ]
+          },
+          "is_hard_gate": { "type": "boolean", "default": false },
+          "approval_quorum": {
+            "type": "object",
+            "additionalProperties": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "is_hard_gate": { "const": true } }, "required": ["is_hard_gate"] },
+            "then": { "required": ["approval_quorum"] }
+          }
+        ]
+      }
+    },
+    "hierarchy": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["parent_kind", "child_kind"],
+        "additionalProperties": false,
+        "properties": {
+          "parent_kind": { "$ref": "#/$defs/workItemKind" },
+          "child_kind": { "$ref": "#/$defs/workItemKind" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "workItemKind": {
+      "type": "string",
+      "enum": [
+        "phase",
+        "epic",
+        "feature",
+        "story",
+        "task",
+        "bug",
+        "deliverable",
+        "test_case"
+      ]
+    }
+  }
+}

@@ -1,0 +1,69 @@
+name: license-audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/pyproject.toml"
+      - "apps/api/uv.lock"
+      - "**/package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/license-audit.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/api/pyproject.toml"
+      - "apps/api/uv.lock"
+      - "**/package.json"
+      - "pnpm-lock.yaml"
+  schedule:
+    # Weekly rescan catches transitive license changes.
+    - cron: "0 8 * * 1"
+
+jobs:
+  python:
+    name: python (pip-licenses)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Sync
+        run: uv sync --project apps/api --extra dev --frozen
+
+      - name: pip-licenses
+        run: |
+          uv run --project apps/api pip install pip-licenses
+          uv run --project apps/api pip-licenses \
+            --format=markdown \
+            --with-authors \
+            --with-urls \
+            --allow-only='MIT;BSD;BSD-2-Clause;BSD-3-Clause;Apache-2.0;Apache Software License;MPL-2.0;ISC;Python Software Foundation License;PSF-2.0;LGPL-3.0-or-later;LGPLv3+;AGPL-3.0-only;AGPLv3;Public Domain;Unlicense;CC0-1.0' \
+            --ignore-packages krititva-api
+
+  javascript:
+    name: javascript (license-checker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "9"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: license-checker
+        run: |
+          pnpm dlx license-checker \
+            --production \
+            --onlyAllow "MIT;BSD;BSD-2-Clause;BSD-3-Clause;Apache-2.0;ISC;MPL-2.0;LGPL-3.0-or-later;AGPL-3.0-only;CC0-1.0;Unlicense;0BSD;Python-2.0" \
+            --excludePackages "@krititva/web;@krititva/api-client;krititva"

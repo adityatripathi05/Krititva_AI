@@ -1,0 +1,143 @@
+name: krititva
+
+services:
+  # --------------------------------------------------------------
+  # Data tier
+  # --------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: krititva
+      POSTGRES_PASSWORD: krititva
+      POSTGRES_DB: krititva
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U krititva -d krititva"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # --------------------------------------------------------------
+  # LLM gateway
+  # --------------------------------------------------------------
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm.config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+
+  # --------------------------------------------------------------
+  # Application tier
+  # (image name resolves at M0.T7 when the api Dockerfile ships;
+  # for now, `docker compose up postgres redis litellm` is the dev path.)
+  # --------------------------------------------------------------
+  api:
+    image: ${KRITITVA_IMAGE_API:-krititva/api:local}
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    environment:
+      POSTGRES_DSN: postgresql+asyncpg://krititva:krititva@postgres:5432/krititva
+      REDIS_URL: redis://redis:6379/0
+      LITELLM_URL: http://litellm:4000
+      KRITITVA_TELEMETRY_ENABLED: "false"
+      KRITITVA_ENVIRONMENT: production
+    ports:
+      - "8000:8000"
+    volumes:
+      - assets:/var/lib/krititva/assets
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/livez').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    image: ${KRITITVA_IMAGE_API:-krititva/api:local}
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    environment:
+      POSTGRES_DSN: postgresql+asyncpg://krititva:krititva@postgres:5432/krititva
+      REDIS_URL: redis://redis:6379/0
+      LITELLM_URL: http://litellm:4000
+      KRITITVA_TELEMETRY_ENABLED: "false"
+      KRITITVA_ENVIRONMENT: production
+    volumes:
+      - assets:/var/lib/krititva/assets
+    command: ["arq", "app.workers.arq_settings.WorkerSettings"]
+
+  web:
+    image: ${KRITITVA_IMAGE_WEB:-krititva/web:local}
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: http://api:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3000:3000"
+
+  # --------------------------------------------------------------
+  # Observability (opt-in with `--profile obs`)
+  # --------------------------------------------------------------
+  langfuse:
+    image: langfuse/langfuse:latest
+    profiles: ["obs"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://krititva:krititva@postgres:5432/langfuse
+      NEXTAUTH_SECRET: change-me-in-real-deploys
+      SALT: change-me-in-real-deploys
+      NEXTAUTH_URL: http://localhost:3001
+      TELEMETRY_ENABLED: "false"
+    ports:
+      - "3001:3000"
+
+volumes:
+  pgdata:
+  redisdata:
+  assets:
