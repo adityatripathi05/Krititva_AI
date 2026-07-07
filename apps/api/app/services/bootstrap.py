@@ -8,7 +8,7 @@ operator must complete first-run via ``/setup``.
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import AlreadyBootstrapped
@@ -68,6 +68,10 @@ async def bootstrap_setup(
     """First-run provisioning (FR-4.12.2): create the singleton org and the first
     ``org_admin``. Refuses once an org_admin already exists — the open ``/setup``
     endpoint must be a one-time door, not an admin factory."""
+    # Serialize concurrent first-run attempts: the second waiter blocks here, then
+    # sees the now-existing admin and is rejected. Transaction-scoped, auto-released
+    # on commit/rollback — closes the check-then-act race on the singleton invariant.
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext('krititva-bootstrap'))"))
     if await has_org_admin(db):
         raise AlreadyBootstrapped("an org admin already exists")
 

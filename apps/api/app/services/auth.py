@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.errors import EmailAlreadyRegistered
 from app.config import get_settings
 from app.models import (
     Invitation,
@@ -21,7 +22,7 @@ from app.models import (
     RefreshToken,
     User,
 )
-from app.security.hashing import hash_password, verify_password
+from app.security.hashing import hash_password, verify_dummy, verify_password
 from app.security.jwt import (
     encode_access_token,
     hash_opaque_token,
@@ -49,7 +50,10 @@ class AuthService:
         """Return (user, access_token, refresh_raw) or None on invalid creds."""
         stmt = select(User).where(User.email == email, User.is_active.is_(True))
         user = (await self.db.execute(stmt)).scalar_one_or_none()
-        if user is None or not verify_password(password, user.password_hash):
+        if user is None:
+            verify_dummy(password)  # equalize timing — no user-enumeration oracle
+            return None
+        if not verify_password(password, user.password_hash):
             return None
         access = encode_access_token(user.id)
         refresh_raw = await self._issue_refresh(user.id, user_agent=user_agent)
@@ -148,6 +152,12 @@ class AuthService:
         inv = (await self.db.execute(stmt)).scalar_one_or_none()
         if inv is None:
             return None
+
+        already = (
+            await self.db.execute(select(User.id).where(User.email == inv.email))
+        ).scalar_one_or_none()
+        if already is not None:
+            raise EmailAlreadyRegistered("an account with this email already exists")
 
         user = User(
             organization_id=inv.organization_id,

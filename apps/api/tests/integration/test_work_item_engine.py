@@ -377,6 +377,24 @@ async def test_lineage_respects_max_depth_and_diamond(db_session: AsyncSession) 
     assert {node.id for node in shallow} == {a.id, b.id}
 
 
+async def test_rank_ordering_across_magnitude_boundary(db_session: AsyncSession) -> None:
+    """Regression for the rank-collation bug (#1): appending after a prepend must
+    use bytewise MAX(rank), or it mints a duplicate key. Only reproduces through
+    the DB (the column must be COLLATE "C"), never in pure-Python tests."""
+    ctx = await _ctx(db_session)
+    a = await _new(ctx, "story", "A")  # rank ~ "a0"
+    b = await _new(ctx, "story", "B")  # rank ~ "a1"
+    # Move B to the very top -> it gets a "Z..." key, mixing a/Z magnitudes.
+    await ctx.svc.rerank(ctx.project, b, None, a.id, ctx.admin_id)
+    c = await _new(ctx, "story", "C")  # append -> MAX(rank) must be bytewise
+
+    ranks = [a.rank, b.rank, c.rank]
+    assert len(set(ranks)) == 3, f"duplicate rank minted: {ranks}"
+    # DB-side ORDER BY rank must match the intended visual order B (top), A, C.
+    ordered = await ctx.svc.list_for_project(ctx.project.id)
+    assert [w.title for w in ordered] == ["B", "A", "C"]
+
+
 async def _org_of(db: AsyncSession, ctx: Ctx):
     from app.models import Organization
 

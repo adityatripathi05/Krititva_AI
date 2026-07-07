@@ -21,6 +21,7 @@ from app.api.errors import (
     HierarchyViolation,
     InsufficientRole,
     InvalidRank,
+    InvalidReference,
     InvalidTransition,
     NotFound,
 )
@@ -28,9 +29,11 @@ from app.engine import key_between
 from app.models import (
     HierarchyRule,
     LinkType,
+    Milestone,
     Project,
     ProjectMember,
     ProjectRole,
+    Sprint,
     WorkflowCategory,
     WorkflowState,
     WorkflowTransition,
@@ -80,6 +83,12 @@ class WorkItemService:
     ) -> WorkItem:
         if payload.parent_id is not None:
             await self._check_hierarchy(project.id, payload.parent_id, payload.kind)
+        await self._validate_refs(
+            project.id,
+            assignee_id=payload.assignee_id,
+            sprint_id=payload.sprint_id,
+            milestone_id=payload.milestone_id,
+        )
 
         state_id = await self._initial_state_id(project.id)
         seq = await self._next_seq(project.id)
@@ -129,6 +138,39 @@ class WorkItemService:
                 detail={"parent_kind": parent.kind.value, "child_kind": child_kind.value},
             )
 
+    async def _validate_refs(
+        self,
+        project_id: uuid.UUID,
+        *,
+        assignee_id: uuid.UUID | None,
+        sprint_id: uuid.UUID | None,
+        milestone_id: uuid.UUID | None,
+    ) -> None:
+        """Pin optional references to this project: an assignee must be a member,
+        and any sprint/milestone must belong to the same project (FR-4.1.3 tenant
+        scoping). ``None`` values (unset / cleared) are skipped."""
+        if assignee_id is not None:
+            member = await self.db.get(ProjectMember, (project_id, assignee_id))
+            if member is None:
+                raise InvalidReference(
+                    "assignee is not a member of this project",
+                    detail={"assignee_id": str(assignee_id)},
+                )
+        if sprint_id is not None:
+            sprint = await self.db.get(Sprint, sprint_id)
+            if sprint is None or sprint.project_id != project_id:
+                raise InvalidReference(
+                    "sprint does not belong to this project",
+                    detail={"sprint_id": str(sprint_id)},
+                )
+        if milestone_id is not None:
+            milestone = await self.db.get(Milestone, milestone_id)
+            if milestone is None or milestone.project_id != project_id:
+                raise InvalidReference(
+                    "milestone does not belong to this project",
+                    detail={"milestone_id": str(milestone_id)},
+                )
+
     async def _initial_state_id(self, project_id: uuid.UUID) -> uuid.UUID:
         """First 'todo'-category state by sort_order; else lowest sort_order overall."""
         stmt = (
@@ -168,6 +210,16 @@ class WorkItemService:
         changes: dict[str, object],
         actor_id: uuid.UUID,
     ) -> WorkItem:
+        def _ref(key: str) -> uuid.UUID | None:
+            value = changes.get(key)
+            return value if isinstance(value, uuid.UUID) else None
+
+        await self._validate_refs(
+            project.id,
+            assignee_id=_ref("assignee_id"),
+            sprint_id=_ref("sprint_id"),
+            milestone_id=_ref("milestone_id"),
+        )
         for field, value in changes.items():
             setattr(item, field, value)
         await self.audit.write(

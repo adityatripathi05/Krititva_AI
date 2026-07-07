@@ -79,12 +79,16 @@ async function handle(
   }
 
   const payload = await res.text();
-  return new NextResponse(payload, {
-    status: res.status,
-    headers: {
-      "Content-Type": res.headers.get("Content-Type") ?? "application/json",
-    },
+  const headers = new Headers({
+    "Content-Type": res.headers.get("Content-Type") ?? "application/json",
   });
+  // Pass through headers the client legitimately needs (rate-limit backoff,
+  // redirects, downloads). Everything else is dropped by design.
+  for (const name of ["retry-after", "location", "content-disposition", "www-authenticate"]) {
+    const value = res.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return new NextResponse(payload, { status: res.status, headers });
 }
 
 export const GET = handle;

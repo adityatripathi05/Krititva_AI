@@ -22,7 +22,11 @@ export default async function LoginPage({
     redirect("/setup");
   }
   const { next } = await searchParams;
-  const target = next && next.startsWith("/") ? next : "/dashboard";
+  // Only accept a same-origin absolute path. Reject protocol-relative (`//host`)
+  // and backslash (`/\host`) forms, which browsers normalize to another origin.
+  const isSafe =
+    !!next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\");
+  const target = isSafe ? next : "/dashboard";
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-12">
       <Card className="w-full max-w-sm">

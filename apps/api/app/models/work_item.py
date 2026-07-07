@@ -63,7 +63,8 @@ class WorkItem(Base):
     story_points: Mapped[Decimal | None] = mapped_column(Numeric(5, 1), nullable=True)
     estimated_hours: Mapped[Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
     actual_hours: Mapped[Decimal | None] = mapped_column(Numeric(7, 2), nullable=True)
-    rank: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # COLLATE "C" — lexorank requires bytewise ordering (see migration 0007).
+    rank: Mapped[str | None] = mapped_column(Text(collation="C"), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
     ai_generated: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")

@@ -30,6 +30,11 @@ export async function clientApi<T>(path: string, init: RequestInit = {}): Promis
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as ApiError | null;
+    // A 401 here means the proxy's refresh retry also failed — the session is
+    // dead, so bounce to sign-in rather than leaving the user on a broken view.
+    if (res.status === 401 && typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
     throw new ClientApiError(res.status, body?.code ?? `http_${res.status}`, body);
   }
   if (res.status === 204) {

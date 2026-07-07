@@ -53,6 +53,11 @@ class AlreadyBootstrapped(DomainError):
     code = "already_bootstrapped"
 
 
+class EmailAlreadyRegistered(DomainError):
+    http_status = 409
+    code = "email_already_registered"
+
+
 class InsufficientRole(DomainError):
     http_status = 403
     code = "insufficient_role"
@@ -81,6 +86,11 @@ class InvalidTransition(DomainError):
 class InvalidWorkflowConfig(DomainError):
     http_status = 422
     code = "invalid_workflow_config"
+
+
+class InvalidReference(DomainError):
+    http_status = 422
+    code = "invalid_reference"
 
 
 class ConfigInUse(DomainError):

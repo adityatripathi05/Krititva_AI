@@ -95,6 +95,35 @@ async def test_accept_invitation_creates_user_and_logs_in(
     assert r3.json()["code"] == "invitation_invalid"
 
 
+async def test_accept_invitation_conflict_when_email_registered(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """#6 review fix: accepting an invite for an already-registered email returns
+    a typed 409, not an unhandled IntegrityError (500)."""
+    org = await make_org(db_session)
+    admin = await make_user(db_session, org, org_role=OrgRole.org_admin, password="pwd")
+    await make_user(db_session, org, email="taken@corp.example.com")
+    await db_session.commit()
+    tokens = await _login(client, admin.email, "pwd")
+
+    r1 = await client.post(
+        "/api/v1/auth/invitations",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        json={"email": "taken@corp.example.com"},
+    )
+    assert r1.status_code == 201
+    r2 = await client.post(
+        "/api/v1/auth/invitations/accept",
+        json={
+            "token": r1.json()["token"],
+            "display_name": "Dup",
+            "password": "hunter22-safe",
+        },
+    )
+    assert r2.status_code == 409
+    assert r2.json()["code"] == "email_already_registered"
+
+
 async def test_accept_invitation_bogus_token_410(client: AsyncClient) -> None:
     r = await client.post(
         "/api/v1/auth/invitations/accept",

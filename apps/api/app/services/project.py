@@ -15,6 +15,7 @@ import uuid
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.api.errors import (
     ConfigInUse,
@@ -33,6 +34,7 @@ from app.models import (
     User,
     WorkflowState,
     WorkflowTransition,
+    WorkItem,
     WorkItemKind,
 )
 from app.schemas.project import ProjectCreate
@@ -320,13 +322,22 @@ class ProjectService:
     # -----------------------------------------------------------------
 
     async def _work_item_kinds_in_use(self, project_id: uuid.UUID) -> set[WorkItemKind]:
-        """Kinds referenced by existing work items. Empty until work_items lands
-        (M0.T5); this is the seam the in-use safety checks hang on (FR-4.3.2)."""
-        return set()
+        """Distinct kinds referenced by existing work items (FR-4.3.2)."""
+        stmt = select(WorkItem.kind).where(WorkItem.project_id == project_id).distinct()
+        return set((await self.db.execute(stmt)).scalars().all())
 
     async def _parent_child_pairs_in_use(
         self, project_id: uuid.UUID
     ) -> set[tuple[WorkItemKind, WorkItemKind]]:
-        """Parent/child kind pairs realized by existing work-item trees. Empty
-        until work_items lands (M0.T5) — see ``_work_item_kinds_in_use``."""
-        return set()
+        """Distinct (parent.kind, child.kind) pairs realized by existing work-item
+        trees (FR-4.3.2)."""
+        parent = aliased(WorkItem)
+        child = aliased(WorkItem)
+        stmt = (
+            select(parent.kind, child.kind)
+            .join(parent, child.parent_id == parent.id)
+            .where(child.project_id == project_id)
+            .distinct()
+        )
+        rows = (await self.db.execute(stmt)).all()
+        return {(p, c) for p, c in rows}

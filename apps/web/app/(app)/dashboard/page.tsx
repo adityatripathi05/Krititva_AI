@@ -3,13 +3,13 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { serverApi } from "@/lib/api/server";
+import { serverApiAuthed } from "@/lib/api/server";
 import type { Project } from "@/lib/api/types";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const projects = await serverApi<Project[]>("/projects");
+  const projects = await serverApiAuthed<Project[]>("/projects");
   const active = projects.filter((p) => p.status === "active").length;
 
   return (

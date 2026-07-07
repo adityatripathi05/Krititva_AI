@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { ProjectNav } from "@/components/project-nav";
@@ -18,8 +18,9 @@ export default async function ProjectLayout({
   try {
     project = await serverApi<Project>(`/projects/${projectId}`);
   } catch (err) {
-    if (err instanceof ServerApiError && err.status === 404) {
-      notFound();
+    if (err instanceof ServerApiError) {
+      if (err.status === 404) notFound();
+      if (err.status === 401 || err.status === 403) redirect("/login");
     }
     throw err;
   }

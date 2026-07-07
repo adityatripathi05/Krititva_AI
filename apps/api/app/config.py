@@ -9,8 +9,10 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+INSECURE_JWT_DEFAULT = "insecure-dev-only-change-me"
 
 
 class Settings(BaseSettings):
@@ -48,7 +50,7 @@ class Settings(BaseSettings):
     litellm_url: str = Field(default="http://localhost:4000", alias="LITELLM_URL")
 
     # --- Security ---
-    jwt_secret: str = "insecure-dev-only-change-me"  # KRITITVA_JWT_SECRET
+    jwt_secret: str = INSECURE_JWT_DEFAULT  # KRITITVA_JWT_SECRET
     jwt_access_ttl_minutes: int = 30
     jwt_refresh_ttl_days: int = 14
     jwt_algorithm: str = "HS256"
@@ -81,6 +83,12 @@ class Settings(BaseSettings):
     # --- Rate limits ---
     org_rps: int = 100
     user_ai_concurrency: int = 3
+
+    @model_validator(mode="after")
+    def _production_hardening(self) -> Settings:
+        if self.environment == "production" and self.jwt_secret == INSECURE_JWT_DEFAULT:
+            raise ValueError("KRITITVA_JWT_SECRET must be set to a non-default value in production")
+        return self
 
 
 @lru_cache(maxsize=1)

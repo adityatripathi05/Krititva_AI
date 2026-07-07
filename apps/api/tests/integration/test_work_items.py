@@ -350,3 +350,69 @@ async def test_bulk_transition_per_item_result(
         f"/api/v1/projects/{seed.project_id}/work_items/{a['id']}", headers=_bearer(seed.admin)
     )
     assert a_now.json()["state_id"] == seed.states["in_progress"]
+
+
+# ---------------------------------------------------------------------------
+# In-use config safety (#3) + reference validation (#7) — review fixes
+# ---------------------------------------------------------------------------
+
+
+async def test_hierarchy_replace_rejects_in_use_pair(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    seed = await _seed(client, db_session)
+    epic = await _create(client, seed, seed.admin, kind="epic", title="E")
+    await _create(client, seed, seed.admin, kind="feature", title="F", parent_id=epic["id"])
+    # epic->feature is now realized by live items; removing it must be refused.
+    r = await client.patch(
+        f"/api/v1/projects/{seed.project_id}/hierarchy-rules",
+        headers=_bearer(seed.admin),
+        json={"rules": [{"parent_kind": "story", "child_kind": "task"}]},
+    )
+    assert r.status_code == 409
+    assert r.json()["code"] == "config_in_use"
+
+
+async def test_reseed_blocked_when_items_exist(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    seed = await _seed(client, db_session)
+    await _create(client, seed, seed.admin, kind="epic", title="E")
+    r = await client.patch(
+        f"/api/v1/projects/{seed.project_id}/methodology",
+        headers=_bearer(seed.admin),
+        json={"methodology": "waterfall", "reseed_workflow": True},
+    )
+    assert r.status_code == 409
+    assert r.json()["code"] == "config_in_use"
+
+
+async def test_create_rejects_non_member_assignee(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    seed = await _seed(client, db_session)
+    org = await db_session.get(Organization, seed.org_id)
+    assert org is not None
+    outsider = await make_user(db_session, org)  # exists, but not a project member
+    await db_session.commit()
+    r = await client.post(
+        f"/api/v1/projects/{seed.project_id}/work_items",
+        headers=_bearer(seed.admin),
+        json={"kind": "story", "title": "S", "assignee_id": str(outsider.id)},
+    )
+    assert r.status_code == 422
+    assert r.json()["code"] == "invalid_reference"
+
+
+async def test_create_accepts_member_assignee(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    seed = await _seed(client, db_session)
+    dev = await _add_member(db_session, seed.project_id, seed.org_id, ProjectRole.developer)
+    r = await client.post(
+        f"/api/v1/projects/{seed.project_id}/work_items",
+        headers=_bearer(seed.admin),
+        json={"kind": "story", "title": "S", "assignee_id": str(dev.id)},
+    )
+    assert r.status_code == 201
+    assert r.json()["assignee_id"] == str(dev.id)

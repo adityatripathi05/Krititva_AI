@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { serverApi } from "@/lib/api/server";
+import { serverApiAuthed } from "@/lib/api/server";
 import { categoryBadgeVariant } from "@/lib/api/types";
 import type {
   HierarchyRule,
@@ -22,10 +22,10 @@ export default async function ProjectSettingsPage({
 }) {
   const { projectId } = await params;
   const [project, states, transitions, hierarchy] = await Promise.all([
-    serverApi<Project>(`/projects/${projectId}`),
-    serverApi<WorkflowState[]>(`/projects/${projectId}/workflow/states`),
-    serverApi<WorkflowTransition[]>(`/projects/${projectId}/workflow/transitions`),
-    serverApi<HierarchyRule[]>(`/projects/${projectId}/hierarchy-rules`),
+    serverApiAuthed<Project>(`/projects/${projectId}`),
+    serverApiAuthed<WorkflowState[]>(`/projects/${projectId}/workflow/states`),
+    serverApiAuthed<WorkflowTransition[]>(`/projects/${projectId}/workflow/transitions`),
+    serverApiAuthed<HierarchyRule[]>(`/projects/${projectId}/hierarchy-rules`),
   ]);
   const stateLabel = new Map(states.map((s) => [s.id, s.label]));
   const gen = (project.llm_config.generation_models ?? {}) as Record<string, string>;

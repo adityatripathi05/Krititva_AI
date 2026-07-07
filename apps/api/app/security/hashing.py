@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 
@@ -44,6 +46,17 @@ def verify_password(raw: str, hashed: str | None) -> bool:
     except (VerifyMismatchError, InvalidHashError):
         return False
     return True
+
+
+@lru_cache(maxsize=1)
+def _dummy_hash() -> str:
+    return _get_hasher().hash("timing-equalizer")
+
+
+def verify_dummy(raw: str) -> None:
+    """Verify against a throwaway hash to equalize login timing for non-existent
+    users, closing the user-enumeration timing oracle (NFR-5.2.x)."""
+    verify_password(raw, _dummy_hash())
 
 
 def needs_rehash(hashed: str) -> bool:

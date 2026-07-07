@@ -49,7 +49,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             request.method in STATE_CHANGING
             and cookie_value
             and not _has_bearer(request)
-            and not _is_exempt(request.url.path)
+            and not _is_exempt(request.url.path, s.api_prefix)
         ):
             supplied = request.headers.get(header_name)
             if not supplied or not secrets.compare_digest(cookie_value, supplied):
@@ -76,5 +76,8 @@ def _has_bearer(request: Request) -> bool:
     return request.headers.get("Authorization", "").lower().startswith("bearer ")
 
 
-def _is_exempt(path: str) -> bool:
-    return any(path.endswith(suffix) for suffix in CSRF_EXEMPT_SUFFIXES)
+def _is_exempt(path: str, api_prefix: str) -> bool:
+    """Exact full-path match against the known auth entry points. Exact (not
+    suffix) matching so a future route ending in one of these strings can't be
+    silently exempted."""
+    return path in {f"{api_prefix}{suffix}" for suffix in CSRF_EXEMPT_SUFFIXES}

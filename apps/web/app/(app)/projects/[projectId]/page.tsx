@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { serverApi } from "@/lib/api/server";
+import { serverApiAuthed } from "@/lib/api/server";
 import { categoryBadgeVariant } from "@/lib/api/types";
 import type { Project, WorkflowState, WorkItem } from "@/lib/api/types";
 
@@ -13,9 +13,9 @@ export default async function ProjectHomePage({
 }) {
   const { projectId } = await params;
   const [project, states, items] = await Promise.all([
-    serverApi<Project>(`/projects/${projectId}`),
-    serverApi<WorkflowState[]>(`/projects/${projectId}/workflow/states`),
-    serverApi<WorkItem[]>(`/projects/${projectId}/work_items`),
+    serverApiAuthed<Project>(`/projects/${projectId}`),
+    serverApiAuthed<WorkflowState[]>(`/projects/${projectId}/workflow/states`),
+    serverApiAuthed<WorkItem[]>(`/projects/${projectId}/work_items`),
   ]);
 
   const countByState = new Map<string, number>();
