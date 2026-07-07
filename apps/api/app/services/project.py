@@ -26,6 +26,7 @@ from app.methodology import MethodologyTemplate, load_template
 from app.models import (
     HierarchyRule,
     Methodology,
+    OrgRole,
     Project,
     ProjectMember,
     ProjectRole,
@@ -141,6 +142,24 @@ class ProjectService:
         if project is None:
             raise NotFound("not_found")
         return project
+
+    async def list_for_user(self, user: User) -> list[Project]:
+        """Org admins see every project in their org; everyone else sees the
+        projects they are a member of."""
+        if user.org_role is OrgRole.org_admin:
+            stmt = (
+                select(Project)
+                .where(Project.organization_id == user.organization_id)
+                .order_by(Project.created_at.desc())
+            )
+        else:
+            stmt = (
+                select(Project)
+                .join(ProjectMember, ProjectMember.project_id == Project.id)
+                .where(ProjectMember.user_id == user.id)
+                .order_by(Project.created_at.desc())
+            )
+        return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_states(self, project_id: uuid.UUID) -> list[WorkflowState]:
         stmt = (

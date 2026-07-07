@@ -70,7 +70,35 @@ class WorkflowCategory(str, Enum):
     done = "done"
 
 
-# Names for the Postgres ENUM types. Kept in sync with migrations 001 + 005.
+class LinkType(str, Enum):
+    derived_from = "derived_from"
+    tests = "tests"
+    blocks = "blocks"
+    relates_to = "relates_to"
+
+
+class GateStatus(str, Enum):
+    pending = "pending"
+    in_review = "in_review"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class StaleReason(str, Enum):
+    chunk_removed = "chunk_removed"
+    chunk_changed = "chunk_changed"
+    chunk_added_upstream = "chunk_added_upstream"
+
+
+class SprintState(str, Enum):
+    """CHECK-constrained in the DB (sprints.state), modeled for services."""
+
+    planned = "planned"
+    active = "active"
+    closed = "closed"
+
+
+# Names for the Postgres ENUM types. Kept in sync with migrations 001 + 005 + 006.
 PG_ENUM_NAMES = {
     OrgRole: "org_role",
     ProjectRole: "project_role",
@@ -78,4 +106,7 @@ PG_ENUM_NAMES = {
     PortalMode: "portal_mode",
     InvitationState: "invitation_state",
     WorkItemKind: "work_item_kind",
+    LinkType: "link_type",
+    GateStatus: "gate_status",
+    StaleReason: "stale_reason",
 }

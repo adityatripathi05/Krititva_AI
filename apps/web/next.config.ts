@@ -5,17 +5,10 @@ const config: NextConfig = {
   poweredByHeader: false,
   // No phone-home. See .claude/CLAUDE.md §1.6.
   productionBrowserSourceMaps: false,
-  experimental: {
-    typedRoutes: true,
-  },
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/:path*`,
-      },
-    ];
-  },
+  typedRoutes: true,
+  // The backend is reached through the BFF route handlers under app/api/* (they
+  // attach the Bearer token from the HTTP-only cookie), not a rewrite — a plain
+  // rewrite cannot inject the credential the backend requires.
 };
 
 export default config;

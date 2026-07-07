@@ -1,10 +1,10 @@
-# Krititva AI — M0.T1 through M0.T4 Completion Report
+# Krititva AI — M0.T1 through M0.T6 Completion Report
 
-**Status:** M0.T1, M0.T2, M0.T3, M0.T4 delivered
+**Status:** M0.T1–M0.T6 delivered
 **Upstream:** [krititva-roadmap.md](krititva-roadmap.md), [krititva-lld.md](krititva-lld.md)
 **Date range:** 2026-07-06 → 2026-07-07
 
-> M0.T4 (Projects, clients, methodology config) delivery is in [§9](#9-m0t4--projects-clients-methodology-config) below; §§1–8 cover M0.T1–T3.
+> §§1–8 cover M0.T1–T3; [§9](#9-m0t4--projects-clients-methodology-config) M0.T4; [§10](#10-m0t5--work-item-engine-core) M0.T5; [§11](#11-m0t6--frontend-shell) M0.T6.
 
 This document tracks what was actually delivered against the roadmap, what was intentionally deferred, and what carries a known caveat or gotcha. It is the source of truth for "what is done vs. what still needs doing" through M0.T3.
 
@@ -268,3 +268,117 @@ PATCH  /api/v1/projects/{id}/hierarchy-rules
 - **Config** — added `KRITITVA_METHODOLOGY_TEMPLATES_DIR` (default: repo `packages/methodology-templates/`).
 
 No SRS changes were required — everything M0.T4 satisfies existing FR-4.2.* / FR-4.3.* requirements.
+
+---
+
+## 10. M0.T5 — Work Item Engine core
+
+**Status:** Delivered 2026-07-07. Test count **131 / 131** (was 78): +18 work-item HTTP integration, +28 direct-service engine, +7 lexorank property/unit. `mypy --strict` clean on 50 source files.
+
+### 10.1 Subtask delivery
+
+Legend: ✅ delivered · ⚠️ caveat · ➕ beyond scope
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M0.T5.1 Migration 006 | ✅ | `work_items`, `work_item_links`, `sprints`, `milestones`, `stale_flags` + enums `link_type` / `gate_status` / `stale_reason`. Numbered **006** (004 was audit_log). |
+| M0.T5.2 `create` | ✅ | Hierarchy-rule check (422 + offending pair, FR-4.4.3), per-project `seq` (FR-4.4.2), human key `<project.key>-<seq>`, initial-state pick (first todo-category by sort_order), append rank. |
+| M0.T5.3 `transition` | ✅ | Edge lookup (422 if none), required-role with project_owner override (403 otherwise), hard gate → 409 `gate_not_approved`. |
+| M0.T5.4 `link` | ✅ | Cycle-safe on `derived_from` (self + transitive) via an app-level reachability walk → 422 `link_cycle_detected`. `tests`/`blocks`/`relates_to` are not cycle-checked. |
+| M0.T5.5 `rerank` | ✅ | Fractional indexing (base-62, jitter-free). Single-row writes — no periodic full rebalance needed (FR-4.4.7). Property-tested with Hypothesis. |
+| M0.T5.6 `bulk_transition` | ✅ | Per-item auth + per-item error via nested savepoints; a failing item never rolls back the others (LLD: "never partially transactional across items"). |
+| M0.T5.7 lineage | ⚠️ | `GET /work_items/{id}/lineage` walks `derived_from` work-item edges (depth-bounded, cycle-safe). The SQL `lineage_chunks` function is **deferred to M1** — see §10.4. |
+| M0.T5.8 branch coverage | ✅ | State-machine + hierarchy methods 100% branch (direct-service tests); service overall 98% (two defensive guards `# pragma: no cover`). |
+
+### 10.2 Endpoints live (added this task)
+
+```
+POST   /api/v1/projects/{id}/work_items
+GET    /api/v1/projects/{id}/work_items
+GET    /api/v1/projects/{id}/work_items/{wid}
+PATCH  /api/v1/projects/{id}/work_items/{wid}
+POST   /api/v1/projects/{id}/work_items/{wid}/transitions
+POST   /api/v1/projects/{id}/work_items/{wid}/links
+POST   /api/v1/projects/{id}/work_items/{wid}/rerank
+POST   /api/v1/projects/{id}/work_items/bulk-transition
+GET    /api/v1/projects/{id}/work_items/{wid}/lineage
+```
+
+### 10.3 LLD deltas (applied)
+
+- **`idx_wi_assignee_open`** — LLD §2.2 specifies `WHERE state_id IN (SELECT ...)`; Postgres forbids subqueries in index predicates. Shipped a plain `idx_wi_assignee` on `assignee_id`. The partial-index optimization can return later as an application-maintained boolean column if profiling wants it.
+- **Deferred cross-module FKs** — `work_items.source_job_id` (→ ai_generation_jobs), `work_item_links.to_chunk` (→ document_chunks), `stale_flags.triggered_by` (→ document_versions) are plain UUID columns; the FK constraints are added by the M1 migration that creates their targets (LLD §2.3 cycle-deferral pattern).
+
+### 10.4 Deferrals
+
+- **`lineage_chunks` SQL function** — LLD §2.2 defines it, but its body JOINs `document_chunks`, which doesn't exist until M1; Postgres validates SQL-function bodies at creation, so it can't be created now. The lineage endpoint currently returns the work-item `derived_from` ancestry; chunk lineage activates when the function lands in M1.
+- **Hard-gate crossing** — a hard gate is *blocked* now (409). The approval-quorum grant path (`milestone_approvals`, multi-sig) is M2. `milestones` ships as the base table; `milestone_approvals` is not yet created.
+- **`sprints` / `milestones` write APIs** — tables exist (LLD §4.5/§4.6 endpoints) but the sprint/milestone CRUD services are M2/M3. Work items can reference a `sprint_id` / `milestone_id` once those exist.
+
+### 10.5 Caveats
+
+- **Coverage under ASGI** — coverage.py does not trace coroutines executed through the `httpx` ASGI transport, so HTTP-driven integration tests report the service as under-covered. The engine's real branch coverage is measured by the direct-service suite (`test_work_item_engine.py`). Worth remembering before trusting a coverage delta on any route-driven test.
+- **`seq` generation is `MAX(seq)+1`** — no `SELECT ... FOR UPDATE`. Concurrent creates in one project could collide on `uq_work_items_project_seq` (one gets a 500, retryable). Fine at v1 scale; tighten with an advisory lock or a per-project counter if it bites.
+- **`disabled_agents` / gate quorum** — unchanged from M0.T4; still awaiting the agent-role enum and multi-sig approvals (M1.T3 / M2).
+
+No SRS changes were required — everything M0.T5 satisfies existing FR-4.4.* requirements.
+
+---
+
+## 11. M0.T6 — Frontend shell
+
+**Status:** Delivered 2026-07-07. `apps/web` now builds a full authenticated shell. Gates: `pnpm typecheck`, `pnpm lint`, and `pnpm build` (production, with `typedRoutes`) all clean. Backend test count **132 / 132** (+1 for the new `GET /projects` list test).
+
+### 11.1 Subtask delivery
+
+Legend: ✅ delivered · ⚠️ caveat · ➕ beyond scope
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M0.T6.1 Route scaffolding | ✅ | `/`, `/login`, and an `(app)` route group: `dashboard`, `projects`, `projects/[projectId]/{,board,backlog,settings}`. Root redirects by session. |
+| M0.T6.2 Auth flow | ✅ | BFF pattern — see §11.2. HTTP-only cookies, refresh-on-401, `middleware.ts` route gate, TanStack Query for client data. |
+| M0.T6.3 Dashboard + list | ✅ | Server components over `GET /projects` (added this task). Widget grid + recent/all project cards. |
+| M0.T6.4 Kanban board | ✅ | dnd-kit; a drop validates against `workflow_transitions`, fires an optimistic `POST /transitions`, and rolls back + toasts on a 4xx. |
+| M0.T6.5 Backlog | ✅ | dnd-kit sortable ordered by lexorank; drag computes before/after neighbours and calls `POST /rerank` optimistically. |
+| M0.T6.6 WorkItemDialog | ✅ | Parent picker filtered to kinds `hierarchy_rules` allows for the chosen child kind. |
+| ➕ `GET /projects` | ➕ | Backend list endpoint (org_admin → all org projects; else memberships). LLD §4.2 gains it. |
+| ➕ Settings relocated | ➕ | The M0.T4 placeholder `app/projects/[projectId]/settings` moved into `(app)` and rewired to live data (`serverApi`), replacing the mock `lib/methodology.ts`. |
+
+### 11.2 Auth architecture (BFF)
+
+The backend authenticates via `Authorization: Bearer`. A browser can't attach a Bearer header from an HTTP-only cookie, and a plain Next rewrite can't inject one — so all backend traffic goes through Next route handlers that hold the credential:
+
+- `app/api/auth/login` → calls backend `/auth/login`, sets `krititva_access` + `krititva_refresh` HTTP-only cookies.
+- `app/api/v1/[...path]` → catch-all proxy: reads the access cookie, forwards to the backend with a Bearer header; on 401 it transparently refreshes (updating cookies) and retries once. Client TanStack Query hooks call this same-origin proxy.
+- `lib/api/server.ts` (`serverApi`) → Server Components read the cookie via `next/headers` and call the backend directly with Bearer.
+- `middleware.ts` → redirects to `/login` when neither session cookie is present (UX gate; the backend remains the real authority). Bearer auth also bypasses backend CSRF, so no CSRF-token juggling.
+
+### 11.3 New frontend surface
+
+```
+app/
+  page.tsx                          session-aware redirect
+  login/page.tsx                    login (BFF)
+  providers.tsx                     TanStack Query + Toaster
+  api/auth/{login,logout}/route.ts  cookie-setting BFF
+  api/v1/[...path]/route.ts         bearer-injecting proxy (refresh-on-401)
+  (app)/layout.tsx                  sidebar + topbar (loads /auth/me)
+  (app)/dashboard, projects, projects/[projectId]/{,board,backlog,settings}
+components/ui/                       button, input, label, dialog, select, skeleton (+ card, badge)
+components/                         app-sidebar, project-nav, login-form, logout-button,
+                                    toaster, work-item-dialog, board/*, backlog/*
+lib/api/{types,config,server,client}.ts · lib/hooks/work-items.ts · lib/toast.ts
+middleware.ts
+```
+
+New runtime deps (all in the declared stack, AGPL-compatible MIT): `@dnd-kit/{core,sortable,utilities}`, `@radix-ui/react-{dialog,label,select}`.
+
+### 11.4 Deferrals / caveats
+
+- **Not runnable end-to-end here** — this environment has no live API + seeded DB, so the shell is verified by `typecheck` + `lint` + production `build` (which typechecks routes and RSC boundaries), not by Playwright. E2E against docker-compose is `main`-only per CLAUDE.md §5.
+- **`/setup` first-run screen** — M0.T7. Login assumes a user already exists (created via the bootstrap seed / invitation flow).
+- **`[projectId]` not `[key]` in URLs** — deviates from the LLD §7.1 route map's cosmetic `[key]`; there's no key→id endpoint and every API route is id-addressed. Revisit if a `GET /projects?key=` lands.
+- **Toasts** are a minimal in-house Zustand store (no `sonner` dep) — enough for the "roll back + toast the error code" contract; swap for a richer system later if needed.
+- **No document/AI/roadmap/portal routes** — out of M0 scope (documents M1+, AI panel M1.T3, roadmap M3, portal M3).
+
+No SRS changes were required — M0.T6 satisfies UI-1 and UI-4.

@@ -79,31 +79,34 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 - ✅ **M0.T4.4** Config-edit endpoints (`PATCH` transition, `PATCH` hierarchy-rules replace-all, `PATCH` methodology) with in-use safety seam. — Work items land in M0.T5, so the in-use inspectors return empty for now; the check pattern (`ConfigInUse` on removed-but-used) is in place.
 - ✅ **M0.T4.5** Frontend: Project settings route `app/projects/[projectId]/settings` (methodology states/transitions/hierarchy view + read-only LLM config placeholder). Data source is a typed placeholder pending auth (M0.T6) + api-client (M1.T3).
 
-### M0.T5 — Work Item Engine core
+### M0.T5 — Work Item Engine core ✅
+**Status:** Delivered 2026-07-07. See [completion report §10](krititva-completion-M0-T1-T3.md).
 **Deliverables:** `work_items` table + engine implementing hierarchy checks, transitions, cycle-safe link creation, lexorank.
 **Traces:** FR-4.4.1–4.4.9 · §LLD 2.2 (work items), §LLD 3.1 (WorkItemService), §LLD 4.4, §LLD 6.4
 **Effort:** L
 
-- **M0.T5.1** Migration 004: `work_items`, `work_item_links`, `sprints`, `milestones` (basic), `stale_flags` (empty for now).
-- **M0.T5.2** `WorkItemService.create` — hierarchy rule enforcement, per-project `seq` generation.
-- **M0.T5.3** `WorkItemService.transition` — state-machine enforcement (gates checked later in M2).
-- **M0.T5.4** `WorkItemService.link` — cycle detection on `derived_from` chains.
-- **M0.T5.5** Lexorank `rerank` operation with periodic amortized rebalance.
-- **M0.T5.6** `bulk_transition` with per-item auth and per-item error reporting.
-- **M0.T5.7** Lineage endpoint using SQL function `lineage_chunks` (empty result until docs exist).
-- **M0.T5.8** 100% branch coverage on state machine + hierarchy checks (§NFR-5.4.3).
+- ✅ **M0.T5.1** Migration **006** (004 was audit_log): `work_items`, `work_item_links`, `sprints`, `milestones`, `stale_flags` + enums `link_type`/`gate_status`/`stale_reason`. — Three cross-module FKs (`source_job_id`, `to_chunk`, `triggered_by`) deferred to M1 as plain UUID columns; `idx_wi_assignee_open` replaced with a plain index (LLD's subquery predicate is invalid Postgres).
+- ✅ **M0.T5.2** `WorkItemService.create` — hierarchy-rule enforcement (422 with offending pair), per-project `seq`, initial-state selection, append rank.
+- ✅ **M0.T5.3** `WorkItemService.transition` — edge + required-role (with owner override) enforcement. Hard gates return 409 `gate_not_approved` (the approval-quorum grant path lands in M2).
+- ✅ **M0.T5.4** `WorkItemService.link` — application-level cycle detection on `derived_from` chains (self + transitive).
+- ✅ **M0.T5.5** Lexorank `rerank` via fractional indexing — single-row writes, no full rebalance needed (O(1) amortized per FR-4.4.7). Hypothesis property tests.
+- ✅ **M0.T5.6** `bulk_transition` — per-item auth + per-item error via savepoints; never group-atomic.
+- ⚠️ **M0.T5.7** Lineage endpoint — app-level `derived_from` work-item walk (depth-bounded). The SQL `lineage_chunks` function (document chunks) is deferred to M1 with `document_chunks`; its body JOINs a table that doesn't exist yet, so it can't be created now.
+- ✅ **M0.T5.8** State-machine + hierarchy branches at 100% (measured via direct service tests — coverage.py can't trace code run through the httpx ASGI transport). Two defensive guards `# pragma: no cover`; service overall 98%.
 
-### M0.T6 — Frontend shell
+### M0.T6 — Frontend shell ✅
+**Status:** Delivered 2026-07-07. See [completion report §11](krititva-completion-M0-T1-T3.md).
 **Deliverables:** Login, dashboard, project list, project home, board (Kanban), backlog list. No documents yet.
 **Traces:** UI-1, UI-4 · §LLD 7.1–7.2
 **Effort:** L (parallel with T2–T5)
 
-- **M0.T6.1** Route scaffolding (`/`, `/login`, `/setup`, `/(app)/*`).
-- **M0.T6.2** Auth flow with TanStack Query + JWT storage in HTTP-only cookies.
-- **M0.T6.3** Project dashboard + list.
-- **M0.T6.4** Kanban board (dnd-kit) with optimistic transitions.
-- **M0.T6.5** Backlog list with rank-based ordering and drag reorder.
-- **M0.T6.6** WorkItemDialog with parent picker (hierarchy-aware).
+- ✅ **M0.T6.1** Route scaffolding — `/`, `/login`, `(app)` group with `dashboard` / `projects` / `projects/[projectId]/{board,backlog,settings}`. URLs key projects by **id** (`[projectId]`), not `[key]`: every backend endpoint is id-addressed and there's no key→id lookup. `/setup` is M0.T7.
+- ✅ **M0.T6.2** Auth via a **BFF**: `app/api/auth/{login,logout}` route handlers set HTTP-only cookies; a catch-all `app/api/v1/[...path]` proxy attaches the Bearer token (with refresh-on-401) so the JWT never reaches JS. `middleware.ts` gates the app; TanStack Query drives client data.
+- ✅ **M0.T6.3** Dashboard (widget grid + recent projects) and project list, backed by the new `GET /projects`.
+- ✅ **M0.T6.4** Kanban board (dnd-kit) — drag between columns triggers an optimistic transition, validated against `workflow_transitions`; rolls back + toasts on a 4xx.
+- ✅ **M0.T6.5** Backlog list with rank ordering and drag reorder → lexorank `rerank` (optimistic, neighbour-based).
+- ✅ **M0.T6.6** WorkItemDialog with a hierarchy-aware parent picker (parent options filtered to kinds `hierarchy_rules` permits for the chosen child kind).
+- ➕ **Backend** `GET /projects` list endpoint added (dashboard/list need it; LLD §4.2 gains it).
 
 ### M0.T7 — Bootstrap + operator experience
 **Deliverables:** First-run setup screen, seed org+admin, health probes, backup CLI stub.

@@ -352,8 +352,10 @@ CREATE INDEX idx_wi_project_state  ON work_items(project_id, state_id);
 CREATE INDEX idx_wi_parent         ON work_items(parent_id);
 CREATE INDEX idx_wi_sprint         ON work_items(sprint_id);
 CREATE INDEX idx_wi_milestone      ON work_items(milestone_id);
-CREATE INDEX idx_wi_assignee_open  ON work_items(assignee_id)
-    WHERE state_id IN (SELECT id FROM workflow_states WHERE category IN ('todo','in_progress'));
+-- NOTE (M0.T5): a partial predicate with a subquery is invalid in Postgres index
+-- definitions, so the "_open" partial index is shipped as a plain index. Revisit
+-- with an app-maintained boolean column if open-item scans need the partial.
+CREATE INDEX idx_wi_assignee       ON work_items(assignee_id);
 
 CREATE TABLE work_item_links (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -700,6 +702,7 @@ GET    /auth/me                        -> {user, org, memberships}
 
 ### 4.2 Projects & config
 ```
+GET    /projects                       -> [Project]           (org_admin: all org; else memberships)
 POST   /projects                       -> Project             [org_admin | project_owner-role]
 GET    /projects/{id}                  -> Project
 PATCH  /projects/{id}                  -> Project             [project_owner]
@@ -981,6 +984,11 @@ not_started ─▶ in_progress ─▶ gate_review ── hard_gate ─▶ done
 ## 7. Frontend Architecture (concrete)
 
 ### 7.1 Route map (Next.js App Router)
+
+> M0.T6 delta: the dynamic project segment is implemented as `[projectId]` (UUID),
+> not `[key]`. Every backend endpoint is id-addressed and there is no key→id
+> lookup, so the URL carries the id and the UI shows the human key. Revisit if a
+> `GET /projects?key=` resolver is added.
 
 ```
 /                                       Marketing / login redirect

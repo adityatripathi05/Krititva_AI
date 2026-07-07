@@ -7,7 +7,12 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_org_role, require_project_membership
+from app.api.deps import (
+    get_current_user,
+    get_db,
+    require_org_role,
+    require_project_membership,
+)
 from app.models import OrgRole, ProjectMember, ProjectRole, User
 from app.schemas.methodology import (
     HierarchyRuleModel,
@@ -30,6 +35,17 @@ def _service(db: AsyncSession) -> ProjectService:
 # ---------------------------------------------------------------------------
 # Project CRUD
 # ---------------------------------------------------------------------------
+
+
+@router.get("", response_model=list[ProjectOut])
+async def list_projects(
+    actor: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ProjectOut]:
+    """Projects visible to the caller: all org projects for an org_admin, else the
+    caller's memberships."""
+    projects = await _service(db).list_for_user(actor)
+    return [ProjectOut.model_validate(p) for p in projects]
 
 
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)

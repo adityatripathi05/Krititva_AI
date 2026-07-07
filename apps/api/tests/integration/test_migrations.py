@@ -33,6 +33,11 @@ EXPECTED_TABLES = {
     "workflow_states",
     "workflow_transitions",
     "hierarchy_rules",
+    "work_items",
+    "work_item_links",
+    "sprints",
+    "milestones",
+    "stale_flags",
 }
 
 EXPECTED_ENUMS = {
@@ -42,6 +47,9 @@ EXPECTED_ENUMS = {
     "portal_mode",
     "invitation_state",
     "work_item_kind",
+    "link_type",
+    "gate_status",
+    "stale_reason",
 }
 
 

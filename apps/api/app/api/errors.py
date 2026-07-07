@@ -88,6 +88,11 @@ class DuplicateKey(DomainError):
     code = "duplicate_key"
 
 
+class InvalidRank(DomainError):
+    http_status = 422
+    code = "invalid_rank"
+
+
 class CycleDetected(DomainError):
     http_status = 422
     code = "link_cycle_detected"

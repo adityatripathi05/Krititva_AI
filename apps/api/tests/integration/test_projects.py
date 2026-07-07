@@ -191,6 +191,30 @@ async def test_get_project_member_ok_nonmember_404(
     assert r_404.status_code == 404
 
 
+async def test_list_projects_scopes_by_visibility(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    org = await make_org(db_session)
+    admin = await make_user(db_session, org, org_role=OrgRole.org_admin)
+    await db_session.commit()
+    for k in ("LP-1", "LP-2"):
+        await client.post(
+            "/api/v1/projects",
+            headers=_bearer(admin),
+            json={"key": k, "name": k, "methodology": "agile"},
+        )
+    # org_admin sees both org projects.
+    admin_list = await client.get("/api/v1/projects", headers=_bearer(admin))
+    assert admin_list.status_code == 200
+    assert {p["key"] for p in admin_list.json()} >= {"LP-1", "LP-2"}
+
+    # A plain member with no memberships sees none.
+    loner = await make_user(db_session, org, org_role=OrgRole.member)
+    await db_session.commit()
+    loner_list = await client.get("/api/v1/projects", headers=_bearer(loner))
+    assert loner_list.json() == []
+
+
 async def test_list_workflow_config(client: AsyncClient, db_session: AsyncSession) -> None:
     org = await make_org(db_session)
     admin = await make_user(db_session, org, org_role=OrgRole.org_admin)
