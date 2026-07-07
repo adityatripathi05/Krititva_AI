@@ -48,9 +48,29 @@ class Settings(BaseSettings):
     litellm_url: str = Field(default="http://localhost:4000", alias="LITELLM_URL")
 
     # --- Security ---
+    jwt_secret: str = "insecure-dev-only-change-me"  # KRITITVA_JWT_SECRET
     jwt_access_ttl_minutes: int = 30
     jwt_refresh_ttl_days: int = 14
+    jwt_algorithm: str = "HS256"
     data_key: str | None = None  # KRITITVA_DATA_KEY: base64, 32 bytes, for at-rest secrets
+
+    # Argon2id parameters (NFR-5.2.1 baselines).
+    argon2_memory_kb: int = 65536  # 64 MiB
+    argon2_iterations: int = 3
+    argon2_parallelism: int = 1
+
+    # CSRF cookie name for browser sessions (NFR-5.2.9).
+    csrf_cookie_name: str = "krititva_csrf"
+    csrf_header_name: str = "X-CSRF-Token"
+
+    invitation_ttl_days: int = 7
+
+    # --- OIDC (M0.T3.3 — surface only, actual IdP work deferred) ---
+    oidc_enabled: bool = False
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = None
+    oidc_scopes: str = "openid email profile"
 
     # --- Telemetry (must default false; see feedback_no_phone_home) ---
     telemetry_enabled: bool = False

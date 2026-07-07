@@ -33,6 +33,21 @@ class NotFound(DomainError):
     code = "not_found"
 
 
+class InvalidCredentials(DomainError):
+    http_status = 401
+    code = "invalid_credentials"
+
+
+class InvalidToken(DomainError):
+    http_status = 401
+    code = "invalid_token"
+
+
+class InvitationInvalid(DomainError):
+    http_status = 410
+    code = "invitation_invalid"
+
+
 class InsufficientRole(DomainError):
     http_status = 403
     code = "insufficient_role"

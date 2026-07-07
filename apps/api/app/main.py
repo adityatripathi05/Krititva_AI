@@ -14,9 +14,10 @@ from fastapi.responses import ORJSONResponse
 
 from app import __version__
 from app.api.errors import register_exception_handlers
-from app.api.routes import health
+from app.api.routes import auth, health
 from app.config import get_settings
 from app.db import dispose_engine
+from app.security.csrf import CSRFMiddleware
 
 
 @asynccontextmanager
@@ -38,8 +39,10 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
     register_exception_handlers(app)
+    app.add_middleware(CSRFMiddleware)
     # Health probes live at the root (unversioned) so probes don't break on version bumps.
     app.include_router(health.router)
+    app.include_router(auth.router, prefix=settings.api_prefix)
     return app
 
 

@@ -1,5 +1,6 @@
 """SQLAlchemy ORM models. Import here so Alembic and services get one entrypoint."""
 
+from app.models.audit_log import AuditEntry
 from app.models.base import Base
 from app.models.client import Client
 from app.models.enums import (
@@ -14,9 +15,11 @@ from app.models.invitation import Invitation
 from app.models.organization import Organization
 from app.models.project import Project
 from app.models.project_member import ProjectMember
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 
 __all__ = [
+    "AuditEntry",
     "Base",
     "Client",
     "InvitationState",
@@ -29,5 +32,6 @@ __all__ = [
     "Organization",
     "Project",
     "ProjectMember",
+    "RefreshToken",
     "User",
 ]

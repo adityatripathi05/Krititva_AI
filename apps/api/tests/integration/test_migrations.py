@@ -28,6 +28,8 @@ EXPECTED_TABLES = {
     "clients",
     "projects",
     "project_members",
+    "refresh_tokens",
+    "audit_log",
 }
 
 EXPECTED_ENUMS = {

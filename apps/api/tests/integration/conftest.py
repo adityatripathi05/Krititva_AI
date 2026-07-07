@@ -32,12 +32,16 @@ import pytest
 import pytest_asyncio
 from alembic import command
 from alembic.config import Config
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     create_async_engine,
 )
 from testcontainers.postgres import PostgresContainer
+
+from app.api.deps import get_db
+from app.main import create_app
 
 pytestmark = pytest.mark.integration
 
@@ -80,8 +84,15 @@ def _apply_migrations(postgres_dsn: str) -> None:
     command.upgrade(cfg, "head")
 
 
-@pytest_asyncio.fixture(loop_scope="session")
+@pytest_asyncio.fixture
 async def engine(postgres_dsn: str) -> AsyncIterator[AsyncEngine]:
+    """One AsyncEngine per test.
+
+    Session-scoping the engine crashes on Windows because asyncpg connections
+    end up split across event loops (session-loop for setup, function-loop for
+    the test) — cleanup writes then hit a stale proactor. Fresh engine per test
+    costs a few ms and is rock-solid.
+    """
     eng = create_async_engine(postgres_dsn, pool_pre_ping=True, future=True)
     try:
         yield eng
@@ -110,3 +121,24 @@ async def db_session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
         if trans.is_active:
             await trans.rollback()
         await connection.close()
+
+
+@pytest_asyncio.fixture
+async def client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
+    """Async HTTP client bound to a fresh app with the test session injected.
+
+    All FastAPI ``Depends(get_db)`` calls yield the same ``db_session`` — the
+    test can inspect whatever the request wrote via that session.
+    """
+
+    async def _override_get_db() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app = create_app()
+    app.dependency_overrides[get_db] = _override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport, base_url="http://test", follow_redirects=False
+    ) as ac:
+        yield ac
+    app.dependency_overrides.clear()
