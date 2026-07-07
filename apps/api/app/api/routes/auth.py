@@ -11,6 +11,7 @@ from app.api.errors import InsufficientRole, InvalidCredentials, InvitationInval
 from app.config import get_settings
 from app.models import OrgRole, ProjectMember, User
 from app.schemas.auth import (
+    BootstrapStatus,
     InvitationAcceptRequest,
     InvitationCreate,
     InvitationIssuedResponse,
@@ -20,9 +21,11 @@ from app.schemas.auth import (
     MeResponse,
     ProjectMembershipOut,
     RefreshRequest,
+    SetupRequest,
     TokenPair,
     UserOut,
 )
+from app.services import bootstrap
 from app.services.audit import AuditSink
 from app.services.auth import AuthService
 
@@ -132,6 +135,41 @@ async def issue_invitation(
     inv, raw = await svc.issue_invitation(actor, body.email, body.project_id, body.project_role)
     await db.commit()
     return InvitationIssuedResponse(invitation=InvitationOut.model_validate(inv), token=raw)
+
+
+# ---------------------------------------------------------------------------
+# First-run bootstrap
+# ---------------------------------------------------------------------------
+
+
+@router.get("/bootstrap", response_model=BootstrapStatus)
+async def bootstrap_status(db: AsyncSession = Depends(get_db)) -> BootstrapStatus:
+    """Public: has first-run setup been completed? Drives the /setup redirect."""
+    return BootstrapStatus(bootstrapped=await bootstrap.is_bootstrapped(db))
+
+
+@router.post("/setup", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
+async def setup(
+    body: SetupRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> TokenPair:
+    """Public one-time first-run: create the org + first org_admin, then log in.
+    Returns 409 once an org_admin already exists."""
+    svc = AuthService(db, AuditSink(db))
+    admin = await bootstrap.bootstrap_setup(
+        db,
+        AuditSink(db),
+        org_name=body.org_name,
+        email=body.email,
+        display_name=body.display_name,
+        password=body.password,
+    )
+    login_result = await svc.login(admin.email, body.password, _user_agent(request))
+    assert login_result is not None
+    await db.commit()
+    _u, access, refresh_raw = login_result
+    return _token_pair(access, refresh_raw)
 
 
 @router.post("/invitations/accept", response_model=TokenPair)

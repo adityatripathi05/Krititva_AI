@@ -108,17 +108,18 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 - ✅ **M0.T6.6** WorkItemDialog with a hierarchy-aware parent picker (parent options filtered to kinds `hierarchy_rules` permits for the chosen child kind).
 - ➕ **Backend** `GET /projects` list endpoint added (dashboard/list need it; LLD §4.2 gains it).
 
-### M0.T7 — Bootstrap + operator experience
+### M0.T7 — Bootstrap + operator experience ✅
+**Status:** Delivered 2026-07-07. See [completion report §12](krititva-completion-M0-T1-T3.md).
 **Deliverables:** First-run setup screen, seed org+admin, health probes, backup CLI stub.
 **Traces:** FR-4.12.1–4.12.5 · §LLD 8, §HLD 10.1
 **Effort:** M
 
-- **M0.T7.1** `/setup` redirect when no `org_admin` exists.
-- **M0.T7.2** `/livez` + `/readyz` probes.
-- **M0.T7.3** `krititva` CLI skeleton with `backup` and `restore` subcommands (documents `pg_dump -Fc`).
-- **M0.T7.4** Docs: `README.md`, self-host quickstart.
+- ✅ **M0.T7.1** First-run `/setup` — `POST /auth/setup` (public, one-time; 409 `already_bootstrapped` after) creates the singleton org + first `org_admin` and logs in; `GET /auth/bootstrap` drives the redirect. Frontend `/setup` page + `SetupForm` + BFF route; root/login redirect un-bootstrapped installs to `/setup`.
+- ✅ **M0.T7.2** `/livez` + `/readyz` probes — delivered in M0.T2/T3; `/readyz` does a DB round-trip. (Confirmed, unchanged.)
+- ✅ **M0.T7.3** `krititva` CLI (`app/cli.py`, `krititva` console script) with `backup` (pg_dump `-Fc` + asset copy) and `restore` (pg_restore); `--print-only` emits the exact commands. Unit-tested.
+- ✅ **M0.T7.4** `README.md` self-host quickstart (compose up → `/setup` → invite → project → board → `krititva backup`).
 
-**M0 exit checklist:** two engineers can `docker compose up`, complete setup, invite users, create an Agile project, create work items, drag them across a board, and see audit entries.
+**M0 exit checklist:** ✅ two engineers can `docker compose up`, complete setup, invite users, create an Agile project, create work items, drag them across a board, and see audit entries. The full slice — schema, auth/RBAC, methodology-seeded projects, the work-item engine, the Next.js shell, and first-run/operator tooling — is in place. (End-to-end validated per-layer via unit/integration/build gates; live docker-compose smoke is a `main`-branch step.)
 
 ---
 

@@ -1,10 +1,10 @@
-# Krititva AI — M0.T1 through M0.T6 Completion Report
+# Krititva AI — M0 Foundation Completion Report
 
-**Status:** M0.T1–M0.T6 delivered
+**Status:** M0.T1–M0.T7 delivered — **M0 Foundation complete**
 **Upstream:** [krititva-roadmap.md](krititva-roadmap.md), [krititva-lld.md](krititva-lld.md)
 **Date range:** 2026-07-06 → 2026-07-07
 
-> §§1–8 cover M0.T1–T3; [§9](#9-m0t4--projects-clients-methodology-config) M0.T4; [§10](#10-m0t5--work-item-engine-core) M0.T5; [§11](#11-m0t6--frontend-shell) M0.T6.
+> §§1–8 cover M0.T1–T3; [§9](#9-m0t4--projects-clients-methodology-config) M0.T4; [§10](#10-m0t5--work-item-engine-core) M0.T5; [§11](#11-m0t6--frontend-shell) M0.T6; [§12](#12-m0t7--bootstrap--operator-experience) M0.T7.
 
 This document tracks what was actually delivered against the roadmap, what was intentionally deferred, and what carries a known caveat or gotcha. It is the source of truth for "what is done vs. what still needs doing" through M0.T3.
 
@@ -382,3 +382,39 @@ New runtime deps (all in the declared stack, AGPL-compatible MIT): `@dnd-kit/{co
 - **No document/AI/roadmap/portal routes** — out of M0 scope (documents M1+, AI panel M1.T3, roadmap M3, portal M3).
 
 No SRS changes were required — M0.T6 satisfies UI-1 and UI-4.
+
+---
+
+## 12. M0.T7 — Bootstrap + operator experience
+
+**Status:** Delivered 2026-07-07 — **closes M0 Foundation.** Backend **142 / 142** (+10: 4 setup-flow integration, 6 CLI unit). Frontend `typecheck` + `lint` + `build` clean (adds the `/setup` route).
+
+### 12.1 Subtask delivery
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M0.T7.1 First-run `/setup` | ✅ | `bootstrap_setup` service + `POST /auth/setup` (public, one-time — 409 `already_bootstrapped` once an admin exists) creates the singleton org + first `org_admin` and logs in. `GET /auth/bootstrap` → `{bootstrapped}`. Frontend `/setup` page + `SetupForm` + BFF route; root and login pages redirect un-bootstrapped installs to `/setup`, and `/setup` bounces to `/login` once done. |
+| M0.T7.2 Health probes | ✅ | `/livez` (process) + `/readyz` (DB round-trip) — shipped in M0.T2/T3; confirmed, unchanged. |
+| M0.T7.3 `krititva` CLI | ✅ | `app/cli.py` + `krititva` console script. `backup` (pg_dump `-Fc` + `shutil.copytree` of assets), `restore` (pg_restore `--clean --if-exists`), `--print-only` to emit commands. Command builders are pure + unit-tested; DSN is converted from the async driver to libpq form. |
+| M0.T7.4 Quickstart docs | ✅ | `README.md` five-step self-host quickstart matching the M0 exit checklist. |
+
+### 12.2 Security note — the one-time setup door
+
+`POST /auth/setup` is public (no session exists yet) and CSRF-exempt (body-carried secrets are the boundary, like login). Its safety rests entirely on the `has_org_admin` guard: the instant one active `org_admin` exists it returns 409, so it can never be used to mint a second admin. Tested directly (`test_setup_is_one_time`).
+
+### 12.3 New / changed surface
+
+- Backend: `services/bootstrap.py` (`bootstrap_setup`), `routes/auth.py` (`GET /auth/bootstrap`, `POST /auth/setup`), `schemas/auth.py` (`BootstrapStatus`, `SetupRequest`), `errors.py` (`AlreadyBootstrapped`), `security/csrf.py` (`/auth/setup` exempt), `cli.py`, `pyproject.toml` (`krititva` script + `app/cli.py` ruff per-file ignore for print/subprocess).
+- Frontend: `app/setup/page.tsx`, `components/setup-form.tsx`, `app/api/auth/setup/route.ts`, `lib/api/bootstrap.ts`; redirect wiring in `app/page.tsx` + `app/login/page.tsx`.
+
+### 12.4 Deferrals / caveats
+
+- **"Pull recommended local models" one-click** (FR-4.12.2) — not built; the operator pulls Ollama models manually per the README. It's an optional, network-permitting convenience, deferrable past M0.
+- **CLI runs unverified against a real Postgres here** — `backup`/`restore` construct and (non-`--print-only`) execute `pg_dump`/`pg_restore`, but the round-trip isn't exercised in CI (no pg client binaries in the unit env). Command construction is unit-tested; the live round-trip belongs in the tagged-release smoke suite.
+- **No auto-bootstrap on startup** — intentional (FR-4.12.2 wording); the operator completes `/setup`. Migrations *do* auto-run at api start under the advisory lock (FR-4.12.4), unchanged from M0.T2.
+
+### 12.5 M0 Foundation — done
+
+The end-to-end M0 slice stands: Postgres schema (6 migrations, 16 tables), Argon2id auth + JWT/refresh + RBAC (404-not-403), methodology-as-data project creation, the work-item engine (hierarchy, state machine, cycle-safe links, lexorank), the Next.js BFF shell (dashboard, board, backlog, settings), and first-run + operator tooling. Aggregate: **142 backend tests**, `mypy --strict` clean on 52 source files, frontend `build` clean. Live docker-compose smoke + Playwright E2E are the `main`-branch gates per CLAUDE.md §5.
+
+No SRS changes were required — M0.T7 satisfies FR-4.12.1–4.12.5 (4.12.2's optional model-pull deferred).

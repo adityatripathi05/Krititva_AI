@@ -47,6 +47,7 @@ dev = [
 ]
 
 [project.scripts]
+krititva = "app.cli:main"
 krititva-api = "app.main:main"
 krititva-worker = "app.workers.arq_settings:main"
 
@@ -94,6 +95,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S", "T20"]
 "app/migrations/**/*.py" = ["E", "F", "N", "S"]
+# The operator CLI prints to the terminal and intentionally shells out to pg_dump.
+"app/cli.py" = ["T20", "S603", "S607"]
 
 [tool.ruff.format]
 quote-style = "double"

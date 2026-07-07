@@ -48,6 +48,11 @@ class InvitationInvalid(DomainError):
     code = "invitation_invalid"
 
 
+class AlreadyBootstrapped(DomainError):
+    http_status = 409
+    code = "already_bootstrapped"
+
+
 class InsufficientRole(DomainError):
     http_status = 403
     code = "insufficient_role"

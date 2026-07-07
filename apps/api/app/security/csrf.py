@@ -31,6 +31,7 @@ CSRF_EXEMPT_SUFFIXES: Final = (
     "/auth/login",
     "/auth/refresh",
     "/auth/invitations/accept",
+    "/auth/setup",
 )
 
 

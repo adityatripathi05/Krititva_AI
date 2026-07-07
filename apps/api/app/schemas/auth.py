@@ -87,3 +87,19 @@ class InvitationAcceptRequest(BaseModel):
     token: str = Field(min_length=1, max_length=512)
     display_name: str = Field(min_length=1, max_length=200)
     password: str = Field(min_length=8, max_length=1024)
+
+
+# ---------------------------------------------------------------------------
+# First-run bootstrap (FR-4.12.2)
+# ---------------------------------------------------------------------------
+
+
+class BootstrapStatus(BaseModel):
+    bootstrapped: bool
+
+
+class SetupRequest(BaseModel):
+    org_name: str = Field(min_length=1, max_length=200)
+    email: EmailStr
+    display_name: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=8, max_length=1024)

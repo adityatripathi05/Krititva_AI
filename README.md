@@ -52,7 +52,45 @@ uv run --project apps/api uvicorn app.main:app --reload --host 0.0.0.0 --port 80
 pnpm --filter web dev
 ```
 
-Full self-host quickstart lands with milestone M0.T7. See [`docs/krititva-roadmap.md`](docs/krititva-roadmap.md).
+## Self-host quickstart
+
+A fresh install in five steps. Everything runs locally; with telemetry off (the
+default) the instance makes **zero outbound requests** apart from your own LLM calls.
+
+```bash
+# 1. Configure. Copy the example env and set at least KRITITVA_JWT_SECRET and
+#    KRITITVA_DATA_KEY (a 32-byte base64 value). Telemetry stays off by default.
+cp .env.example .env
+
+# 2. Bring up the full stack (web, api, worker, postgres+pgvector, redis, litellm).
+docker compose --file deploy/docker-compose.yml up -d
+#    (add `--profile obs` to also start self-hosted Langfuse)
+```
+
+Migrations run automatically at api start, serialized by an advisory lock so
+multiple api replicas don't race; a failed migration halts startup with a clear
+error (FR-4.12.4).
+
+3. **First-run setup.** Open `http://localhost:3000`. With no admin yet you're
+   sent to **`/setup`** — create your organization and the first `org_admin`. This
+   door closes the moment an admin exists (a second `POST /auth/setup` returns
+   `409 already_bootstrapped`).
+
+4. **Invite your team, then work.** Sign in, invite users, create an Agile
+   project (the methodology template seeds its board, transitions, and hierarchy),
+   add work items, and drag them across the board — every change writes an audit row.
+
+5. **Back up.** The `krititva` CLI wraps the documented `pg_dump -Fc` procedure and
+   copies uploaded assets:
+
+   ```bash
+   # Inside the api container (or any env with the package + POSTGRES_DSN set):
+   krititva backup --output /backups/krititva-$(date +%F).dump
+   krititva restore /backups/krititva-2026-07-07.dump
+   krititva --print-only backup      # print the exact commands without running them
+   ```
+
+   Schedule step 5 with cron and keep the dumps off-box; that's your DR story.
 
 ## Contributing
 

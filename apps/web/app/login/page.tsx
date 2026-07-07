@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/login-form";
 import {
@@ -8,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { isBootstrapped } from "@/lib/api/bootstrap";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -16,6 +18,9 @@ export default async function LoginPage({
 }: {
   readonly searchParams: Promise<{ next?: string }>;
 }) {
+  if (!(await isBootstrapped())) {
+    redirect("/setup");
+  }
   const { next } = await searchParams;
   const target = next && next.startsWith("/") ? next : "/dashboard";
   return (
