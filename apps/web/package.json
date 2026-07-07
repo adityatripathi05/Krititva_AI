@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@krititva/api-client": "workspace:*",
-    "@types/node": "^20.14.0",
+    "@types/node": "^26.1.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
