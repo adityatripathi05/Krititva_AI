@@ -14,7 +14,7 @@ from fastapi.responses import ORJSONResponse
 
 from app import __version__
 from app.api.errors import register_exception_handlers
-from app.api.routes import auth, health
+from app.api.routes import auth, health, projects
 from app.config import get_settings
 from app.db import dispose_engine
 from app.security.csrf import CSRFMiddleware
@@ -43,6 +43,7 @@ def create_app() -> FastAPI:
     # Health probes live at the root (unversioned) so probes don't break on version bumps.
     app.include_router(health.router)
     app.include_router(auth.router, prefix=settings.api_prefix)
+    app.include_router(projects.router, prefix=settings.api_prefix)
     return app
 
 

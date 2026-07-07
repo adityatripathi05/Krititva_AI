@@ -10,6 +10,8 @@ from app.models.enums import (
     PortalMode,
     ProjectRole,
     ProjectStatus,
+    WorkflowCategory,
+    WorkItemKind,
 )
 from app.models.invitation import Invitation
 from app.models.organization import Organization
@@ -17,6 +19,7 @@ from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
+from app.models.workflow import HierarchyRule, WorkflowState, WorkflowTransition
 
 __all__ = [
     "AuditEntry",
@@ -28,10 +31,15 @@ __all__ = [
     "PortalMode",
     "ProjectRole",
     "ProjectStatus",
+    "WorkItemKind",
+    "WorkflowCategory",
     "Invitation",
     "Organization",
     "Project",
     "ProjectMember",
     "RefreshToken",
     "User",
+    "HierarchyRule",
+    "WorkflowState",
+    "WorkflowTransition",
 ]

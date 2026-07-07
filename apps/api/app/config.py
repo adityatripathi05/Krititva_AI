@@ -65,6 +65,9 @@ class Settings(BaseSettings):
 
     invitation_ttl_days: int = 7
 
+    # Methodology seed templates (packages/methodology-templates/). None → repo default.
+    methodology_templates_dir: str | None = None
+
     # --- OIDC (M0.T3.3 — surface only, actual IdP work deferred) ---
     oidc_enabled: bool = False
     oidc_issuer: str | None = None

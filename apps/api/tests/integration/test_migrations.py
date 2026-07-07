@@ -30,6 +30,9 @@ EXPECTED_TABLES = {
     "project_members",
     "refresh_tokens",
     "audit_log",
+    "workflow_states",
+    "workflow_transitions",
+    "hierarchy_rules",
 }
 
 EXPECTED_ENUMS = {
@@ -38,6 +41,7 @@ EXPECTED_ENUMS = {
     "methodology",
     "portal_mode",
     "invitation_state",
+    "work_item_kind",
 }
 
 

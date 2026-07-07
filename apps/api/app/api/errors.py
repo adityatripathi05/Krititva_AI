@@ -73,6 +73,21 @@ class InvalidTransition(DomainError):
     code = "invalid_transition"
 
 
+class InvalidWorkflowConfig(DomainError):
+    http_status = 422
+    code = "invalid_workflow_config"
+
+
+class ConfigInUse(DomainError):
+    http_status = 409
+    code = "config_in_use"
+
+
+class DuplicateKey(DomainError):
+    http_status = 409
+    code = "duplicate_key"
+
+
 class CycleDetected(DomainError):
     http_status = 422
     code = "link_cycle_detected"

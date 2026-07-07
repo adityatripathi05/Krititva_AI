@@ -108,6 +108,7 @@ The four architect-review answers change:
 Additional deltas surfaced during LLD:
 - `organizations` table added (singleton in v1).
 - `invitations` table added.
+- `refresh_tokens` table added — rotation-on-use ledger for NFR-5.2.2. Opaque tokens hashed with SHA-256; rotation writes a new row with `rotated_from` pointing at the revoked predecessor.
 - `stale_flags` table added (§5.5 HLD).
 - `worker_heartbeats` table for stuck-job detection (§FR-4.6.8).
 - Cycle-safe recursive lineage helper as an SQL function.
@@ -186,6 +187,21 @@ CREATE TABLE invitations (
 );
 CREATE INDEX idx_invitations_email ON invitations(email);
 CREATE INDEX idx_invitations_state ON invitations(state) WHERE state = 'pending';
+
+CREATE TABLE refresh_tokens (                    -- rotation-on-use audit trail (NFR-5.2.2)
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash     TEXT NOT NULL UNIQUE,         -- SHA-256 of the opaque refresh token
+    issued_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at     TIMESTAMPTZ NOT NULL,
+    rotated_from   UUID REFERENCES refresh_tokens(id) ON DELETE SET NULL,
+    revoked_at     TIMESTAMPTZ,                  -- rotation OR logout OR admin revoke
+    revoked_reason TEXT,                         -- 'rotated' | 'logout' | future values
+    user_agent     TEXT
+);
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_active
+    ON refresh_tokens(user_id, expires_at) WHERE revoked_at IS NULL;
 
 CREATE TABLE clients (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -554,7 +570,8 @@ $$ LANGUAGE SQL STABLE;
 - Enum creation before tables.
 - Circular FK between `documents ↔ document_versions` resolved by adding `documents.current_version_id` constraint after both tables exist.
 - Circular FK between `work_items ↔ ai_generation_jobs` resolved by deferring the `fk_wi_source_job` constraint.
-- Advisory lock at Alembic upgrade start: `SELECT pg_advisory_lock(hashtext('krititva-migrations'))`.
+- Advisory lock at Alembic upgrade: `SELECT pg_advisory_xact_lock(hashtext('krititva-migrations'))` **inside** `context.begin_transaction()`. This is a transaction-scoped lock — auto-released on COMMIT or ROLLBACK. Do NOT use the session-scoped `pg_advisory_lock` with a finally-block unlock: on a failed migration, the transaction is aborted and the unlock call itself raises `InFailedSQLTransactionError`, masking the real error.
+- **Enums referenced inside `op.create_table` MUST use `postgresql.ENUM(..., create_type=False)` — never `sa.Enum(..., create_type=False, native_enum=True)`.** The generic `sa.Enum` path emits a spurious `CREATE TYPE` inside `op.create_table` on SQLAlchemy 2.0.51, producing `DuplicateObjectError` on the migration that owns the type. See [`.claude/skills/krititva-migration/SKILL.md`](../.claude/skills/krititva-migration/SKILL.md) for the helper pattern.
 
 ---
 

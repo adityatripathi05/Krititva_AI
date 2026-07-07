@@ -51,11 +51,31 @@ class ProjectStatus(str, Enum):
     cancelled = "cancelled"
 
 
-# Names for the Postgres ENUM types. Kept in sync with migration 001.
+class WorkItemKind(str, Enum):
+    phase = "phase"
+    epic = "epic"
+    feature = "feature"
+    story = "story"
+    task = "task"
+    bug = "bug"
+    deliverable = "deliverable"
+    test_case = "test_case"
+
+
+class WorkflowCategory(str, Enum):
+    """CHECK-constrained in the DB (workflow_states.category), modeled for services."""
+
+    todo = "todo"
+    in_progress = "in_progress"
+    done = "done"
+
+
+# Names for the Postgres ENUM types. Kept in sync with migrations 001 + 005.
 PG_ENUM_NAMES = {
     OrgRole: "org_role",
     ProjectRole: "project_role",
     Methodology: "methodology",
     PortalMode: "portal_mode",
     InvitationState: "invitation_state",
+    WorkItemKind: "work_item_kind",
 }

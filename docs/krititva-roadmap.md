@@ -1,6 +1,6 @@
 # Krititva AI — Roadmap, Milestones, and Task Breakdown (v1.0)
 
-**Status:** Draft for review
+**Status:** In progress — M0.T1, M0.T2, M0.T3 ✅ delivered ([completion report](krititva-completion-M0-T1-T3.md))
 **Upstream:** [krititva-srs.md](krititva-srs.md), [krititva-hld.md](krititva-hld.md), [krititva-lld.md](krititva-lld.md)
 
 This roadmap decomposes v1 into five milestones (M0–M4), each with tasks and subtasks. Every task cites the SRS requirement(s) it delivers and the LLD section(s) it implements. Effort is a rough T-shirt size (S ≤ 2 dev-days, M ≤ 1 week, L ≤ 2 weeks, XL > 2 weeks). Two-lane parallelism is assumed (backend + frontend can proceed together where noted).
@@ -27,52 +27,57 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 
 **Goal:** A logged-in agency team can create clients, projects, and work items on a fully self-hosted stack — no AI features yet.
 
-### M0.T1 — Repo bootstrap and tooling
+### M0.T1 — Repo bootstrap and tooling ✅
+**Status:** Delivered 2026-07-06. See [completion report §2](krititva-completion-M0-T1-T3.md).
 **Deliverables:** Turborepo skeleton, uv/pnpm workspaces, `apps/api`, `apps/web`, `packages/methodology-templates`, `packages/api-client`, CI pipeline shell.
 **Traces:** §LLD 1
 **Effort:** S
 
-- **M0.T1.1** Turborepo + pnpm workspace scaffold.
-- **M0.T1.2** `apps/api` uv-managed Python 3.12 project, FastAPI + SQLAlchemy 2.0 pinned.
-- **M0.T1.3** `apps/web` Next.js 15 App Router + shadcn/ui init.
-- **M0.T1.4** GitHub Actions: `ruff`, `mypy --strict`, `pytest`, `eslint`, `tsc`, OpenAPI diff placeholder, license-audit job.
-- **M0.T1.5** `docker-compose.yml` structural stack (web, api, worker, postgres+pgvector, redis, litellm — placeholders OK).
-- **M0.T1.6** DCO check bot enabled on the repo.
+- ✅ **M0.T1.1** Turborepo + pnpm workspace scaffold.
+- ✅ **M0.T1.2** `apps/api` uv-managed Python 3.12 project, FastAPI + SQLAlchemy 2.0 pinned.
+- ✅ **M0.T1.3** `apps/web` Next.js 15 App Router + shadcn/ui init.
+- ⚠️ **M0.T1.4** GitHub Actions: `ruff`, `mypy --strict`, `pytest`, `eslint`, `tsc`, OpenAPI diff placeholder, license-audit job. — OpenAPI diff + traceability check are placeholders; integration-test job deferred pending docker-in-docker setup.
+- ✅ **M0.T1.5** `docker-compose.yml` structural stack (web, api, worker, postgres+pgvector, redis, litellm — placeholders OK).
+- ✅ **M0.T1.6** DCO check bot enabled on the repo.
 
-### M0.T2 — Database + migrations foundation
+### M0.T2 — Database + migrations foundation ✅
+**Status:** Delivered 2026-07-06. See [completion report §2](krititva-completion-M0-T1-T3.md).
 **Deliverables:** Alembic wired, initial migration bringing up `organizations`, `users`, `invitations`, `clients`, `projects`, `project_members`.
 **Traces:** FR-4.1.1–4.1.7, FR-4.2.1–4.2.6, FR-4.12.4 · §LLD 2.2 (identity + tenancy blocks)
 **Effort:** M
 
-- **M0.T2.1** Alembic init; advisory-lock startup wrapper.
-- **M0.T2.2** DDL migration 001: enums (`org_role`, `project_role`, `methodology`, `portal_mode`, `invitation_state`).
-- **M0.T2.3** DDL migration 002: `organizations`, `users`, `invitations`, `clients`, `projects`, `project_members`.
-- **M0.T2.4** Singleton bootstrap seed for `organizations`.
-- **M0.T2.5** SQLAlchemy models + typed session_scope; transactional test fixture (SAVEPOINT-per-test).
+- ✅ **M0.T2.1** Alembic init; advisory-lock startup wrapper. — Switched to `pg_advisory_xact_lock` inside the migration transaction; LLD §2.3 updated.
+- ✅ **M0.T2.2** DDL migration 001: enums (`org_role`, `project_role`, `methodology`, `portal_mode`, `invitation_state`).
+- ✅ **M0.T2.3** DDL migration 002: `organizations`, `users`, `invitations`, `clients`, `projects`, `project_members`.
+- ⚠️ **M0.T2.4** Singleton bootstrap seed for `organizations`. — Service functions (`ensure_singleton_organization`, `has_org_admin`, `is_bootstrapped`) delivered; `/setup` route + first-run redirect is roadmap-owned by M0.T7.
+- ✅ **M0.T2.5** SQLAlchemy models + typed session_scope; transactional test fixture (SAVEPOINT-per-test).
 
-### M0.T3 — Auth + RBAC
+### M0.T3 — Auth + RBAC ✅
+**Status:** Delivered 2026-07-07. See [completion report §2](krititva-completion-M0-T1-T3.md).
 **Deliverables:** Login, refresh, invitations, `/auth/me`, Argon2id hashing, JWT + refresh rotation, CSRF middleware.
 **Traces:** FR-4.1.1–4.1.7, NFR-5.2.1–5.2.3, NFR-5.2.9 · §LLD 3.1 (AuthService), §LLD 4.1
 **Effort:** M
 
-- **M0.T3.1** Argon2id password hashing utility + config-tunable params.
-- **M0.T3.2** JWT access + refresh with rotation-on-use.
-- **M0.T3.3** OIDC pathway via Authlib (behind feature flag; opt-in in v1).
-- **M0.T3.4** Invitation issue / accept flow with token-hash storage.
-- **M0.T3.5** RBAC decorators: `require_org_role`, `require_project_role`, `require_agent_permission`.
-- **M0.T3.6** 404-instead-of-403 policy in service classes (§NFR-5.2.8).
-- **M0.T3.7** CSRF double-submit cookie middleware.
+- ✅ **M0.T3.1** Argon2id password hashing utility + config-tunable params.
+- ✅ **M0.T3.2** JWT access + refresh with rotation-on-use. — Refresh tokens are opaque + SHA-256 hashed in `refresh_tokens` (migration 003); rotation writes `rotated_from` linkage.
+- ⚠️ **M0.T3.3** OIDC pathway via Authlib (behind feature flag; opt-in in v1). — Config surface + `get_oidc_config()` factory delivered; actual redirect/callback flow deferred per roadmap intent.
+- ✅ **M0.T3.4** Invitation issue / accept flow with token-hash storage.
+- ✅ **M0.T3.5** RBAC decorators: `require_org_role`, `require_project_role` (as `require_project_membership`), `require_agent_permission`.
+- ✅ **M0.T3.6** 404-instead-of-403 policy in service classes (§NFR-5.2.8). — Enforced in `require_project_membership`.
+- ✅ **M0.T3.7** CSRF double-submit cookie middleware. — Three exemption layers (no-cookie, Bearer, auth entry paths); implementation notes in completion report §4.5.
+- ➕ **BONUS** Migration 004 `audit_log` + `AuditSink` service, needed to satisfy CLAUDE.md §1.5 for auth events.
 
-### M0.T4 — Projects, clients, methodology config
+### M0.T4 — Projects, clients, methodology config ✅
+**Status:** Delivered 2026-07-07. See [completion report §M0.T4](krititva-completion-M0-T1-T3.md).
 **Deliverables:** Project CRUD, methodology seed application on create, `workflow_states`, `workflow_transitions`, `hierarchy_rules` editable.
 **Traces:** FR-4.2.1–4.2.6, FR-4.3.1–4.3.5 · §LLD 2.2 (methodology config), §LLD 4.2–4.3
 **Effort:** M
 
-- **M0.T4.1** Migration 003: `workflow_states`, `workflow_transitions` (with `approval_quorum` JSONB), `hierarchy_rules`.
-- **M0.T4.2** `packages/methodology-templates/agile.json`, `waterfall.json`, `hybrid.json` — states, transitions, hierarchy.
-- **M0.T4.3** `POST /projects` applies methodology template atomically.
-- **M0.T4.4** Config-edit endpoints with in-use safety checks (no removing states with live items).
-- **M0.T4.5** Frontend: Project settings page (methodology view, LLM config placeholder).
+- ✅ **M0.T4.1** Migration **005** (003/004 were used for refresh_tokens/audit_log): `work_item_kind` enum + `workflow_states`, `workflow_transitions` (with `approval_quorum` JSONB), `hierarchy_rules`. — These three are project-scoped, so they carry no `organization_id` (matches LLD §2.2 exactly).
+- ✅ **M0.T4.2** `packages/methodology-templates/{agile,waterfall,hybrid}.json` wired via `app/methodology/` loader — Pydantic-validated at load (referential integrity: transitions point at real states, hard gates carry a quorum). No `jsonschema` runtime dep added.
+- ✅ **M0.T4.3** `POST /projects` applies the methodology template atomically (states → transitions → hierarchy in one transaction with the project row); creator enrolled as `project_owner`.
+- ✅ **M0.T4.4** Config-edit endpoints (`PATCH` transition, `PATCH` hierarchy-rules replace-all, `PATCH` methodology) with in-use safety seam. — Work items land in M0.T5, so the in-use inspectors return empty for now; the check pattern (`ConfigInUse` on removed-but-used) is in place.
+- ✅ **M0.T4.5** Frontend: Project settings route `app/projects/[projectId]/settings` (methodology states/transitions/hierarchy view + read-only LLM config placeholder). Data source is a typed placeholder pending auth (M0.T6) + api-client (M1.T3).
 
 ### M0.T5 — Work Item Engine core
 **Deliverables:** `work_items` table + engine implementing hierarchy checks, transitions, cycle-safe link creation, lexorank.
