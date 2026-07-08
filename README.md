@@ -63,7 +63,9 @@ default) the instance makes **zero outbound requests** apart from your own LLM c
 cp .env.example .env
 
 # 2. Bring up the full stack (web, api, worker, postgres+pgvector, redis, litellm).
-docker compose --file deploy/docker-compose.yml up -d
+#    `--env-file .env` is required: with `-f deploy/...` compose reads .env from
+#    the file's directory, not the repo root. `--build` builds the local images.
+docker compose -f deploy/docker-compose.yml --env-file .env up -d --build
 #    (add `--profile obs` to also start self-hosted Langfuse)
 ```
 

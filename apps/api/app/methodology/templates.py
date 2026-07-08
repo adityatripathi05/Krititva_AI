@@ -19,9 +19,24 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.config import get_settings
 from app.models.enums import Methodology, ProjectRole, WorkflowCategory, WorkItemKind
 
-# apps/api/app/methodology/templates.py → parents[4] == repo root.
-_REPO_ROOT = Path(__file__).resolve().parents[4]
-_DEFAULT_DIR = _REPO_ROOT / "packages" / "methodology-templates"
+
+def _find_default_dir() -> Path:
+    """Locate ``packages/methodology-templates`` by walking up from this file.
+
+    Robust across layouts: the dev tree (apps/api/app/methodology/) and the
+    container (/app/app/methodology/ with packages copied to /app/packages) both
+    resolve, unlike a hardcoded ``parents[N]`` which breaks when the depth changes.
+    Overridable via ``KRITITVA_METHODOLOGY_TEMPLATES_DIR``.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / "packages" / "methodology-templates"
+        if candidate.is_dir():
+            return candidate
+    return here.parent / "packages" / "methodology-templates"
+
+
+_DEFAULT_DIR = _find_default_dir()
 
 
 class TemplateState(BaseModel):

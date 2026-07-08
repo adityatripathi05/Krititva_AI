@@ -1,0 +1,32 @@
+# Never ship host-installed deps or build artifacts into the build context.
+# Without this, `COPY apps/web ./apps/web` overlays the host's pnpm-symlinked
+# node_modules (pointing at host paths) over the image's installed one, breaking
+# module resolution (e.g. next/dist/bin/next not found).
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/out
+
+# Python
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# VCS / local
+.git
+.gitignore
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+**/.DS_Store
+
+# Editor / tooling
+.vscode
+.idea
+.planning
+docs

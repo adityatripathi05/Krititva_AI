@@ -7,16 +7,18 @@ FROM python:3.12-slim AS builder
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
-    UV_COMPILE_BYTECODE=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_PROJECT_ENVIRONMENT=/venv
 
 RUN pip install --no-cache-dir uv==0.4.20
 
 WORKDIR /build
-COPY apps/api/pyproject.toml apps/api/README.md ./
+# uv.lock must be present so --frozen installs the locked set into /venv (the env
+# we ship). Without UV_PROJECT_ENVIRONMENT, uv syncs into ./.venv and /venv holds
+# only the bare interpreter — uvicorn/alembic then missing at runtime.
+COPY apps/api/pyproject.toml apps/api/uv.lock apps/api/README.md ./
 COPY apps/api/app ./app
-RUN uv venv /venv && \
-    VIRTUAL_ENV=/venv uv sync --no-dev --frozen 2>/dev/null || \
-    VIRTUAL_ENV=/venv uv sync --no-dev
+RUN uv sync --no-dev --frozen
 
 # --- runtime ---------------------------------------------------
 FROM python:3.12-slim AS runtime
@@ -31,6 +33,9 @@ WORKDIR /app
 COPY --from=builder /venv /venv
 COPY apps/api/app ./app
 COPY apps/api/alembic.ini ./alembic.ini
+# Methodology seed templates — resolved at runtime by app/methodology/templates.py
+# (walks up to packages/methodology-templates).
+COPY packages/methodology-templates ./packages/methodology-templates
 
 USER krititva
 EXPOSE 8000

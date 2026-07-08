@@ -16,20 +16,22 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /repo
 COPY --from=deps /repo /repo
 COPY apps/web ./apps/web
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    BUILD_STANDALONE=1
 RUN pnpm --filter @krititva/web build
 
 # --- runtime ---------------------------------------------------
 FROM node:20-alpine AS runtime
-RUN adduser -D -u 1000 krititva
+# node:alpine already ships a non-root `node` user (uid 1000); reuse it rather
+# than creating a colliding one.
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
 
-COPY --from=builder --chown=krititva:krititva /repo/apps/web/.next/standalone ./
-COPY --from=builder --chown=krititva:krititva /repo/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder --chown=krititva:krititva /repo/apps/web/public ./apps/web/public
+COPY --from=builder --chown=node:node /repo/apps/web/.next/standalone ./
+COPY --from=builder --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=node:node /repo/apps/web/public ./apps/web/public
 
-USER krititva
+USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
