@@ -521,3 +521,51 @@ POST   /api/v1/projects/{id}/documents/{did}/versions/{vid}/approve
 - **M1.T2.5 load test** — see §15.1.
 - **Project-level embedding-model selection** — the pipeline uses `DEFAULT_EMBEDDING_MODEL` (`nomic-embed-text`) until `llm_config` is wired to projects; the retrieval filter already keys on `embedding_model` so per-project models drop in cleanly.
 - **`lineage_chunks` SQL function** — now fully unblockable (`document_chunks` exists); still slated M1.T4.1.
+
+---
+
+## 16. M1.T3 — AI Orchestrator + SSE (2026-07-13)
+
+**Status:** Delivered (T3.1–T3.6). Test count **214 / 214** (was 184): +30 (3 semaphore unit, 16 orchestrator/worker/sweeper direct-service, 11 HTTP). `mypy --strict` clean on 72 source files; ruff clean. Traces: FR-4.6.2–4.6.10, NFR-5.2.5, NFR-5.3.1–5.3.2 · LLD §2.2, §3.1, §5.6/§5.7, §10.
+
+### 16.1 Subtask delivery
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M1.T3.1 Migration **0010** | ✅ | `ai_generation_jobs` (project-scoped, no org_id; append-only after `finished_at`) + `ai_provenance` (append-only, `CHECK stage IN (...)`, `CHECK source_chunk OR source_item`). Resolves `fk_wi_source_job` + `fk_dv_ai_job` — **all deferred cross-module FKs are now closed**. |
+| M1.T3.2 `enqueue` | ✅ | Gate order (LLD §10): `AIDisabled`→`AgentDisabled`→`CannotProduceArtifact`→`InsufficientRole`→`PrereqNotApproved`→`TooManyInFlight`. Catalog data in `app/ai/catalog.py` (ROLE_ARTIFACTS/ARTIFACT_PREREQS/invocation-matrix from the blueprint). `retrieval_model` pinned at enqueue for reproducibility. |
+| M1.T3.3 Semaphore | ✅ | `RedisAISemaphore` atomic acquire (INCR→check→DECR-on-overflow) + TTL leak-guard; per-user key. `NullSemaphore` when Redis absent. Worker releases the slot on terminal (`finally`). |
+| M1.T3.4 SSE | ✅ | `_event_stream` replays a `state` frame, subscribes `job:{id}`, relays `progress` frames, 15 s `heartbeat`, closes on terminal. `X-Accel-Buffering: no`. |
+| M1.T3.5 Sweeper | ✅ | `sweep_stuck_jobs` (pure, tested) + `worker_heartbeat_sweeper` arq cron (every 30 s): `running` + `heartbeat_at < now()-60s` → `failed` + terminal frame. |
+| M1.T3.6 accept/reject | ✅ | `accept` promotes the AI draft to canonical by approving its document version (§1.1); `reject` requires a reason and leaves the draft non-canonical. Reviewer roles = owner/scrum_master. |
+
+### 16.2 Endpoints live (added this task)
+
+```
+POST   /api/v1/projects/{id}/artifacts                        -> {job_id} (202)
+GET    /api/v1/projects/{id}/artifacts/jobs/{jid}             -> JobStatus
+GET    /api/v1/projects/{id}/artifacts/jobs/{jid}/events      -> text/event-stream
+POST   /api/v1/projects/{id}/artifacts/jobs/{jid}/accept      -> AcceptResult
+POST   /api/v1/projects/{id}/artifacts/jobs/{jid}/reject      -> 204
+GET    /api/v1/projects/{id}/artifacts/jobs/{jid}/provenance  -> [ProvenanceEntry]
+```
+
+### 16.3 Non-negotiables honored
+
+- **§1.1 draft-and-review** — the worker persists LLM output as a **draft** `DocumentVersion` (`status='draft'`, `ai_job_id` set); nothing becomes canonical without an explicit `accept` (which calls `DocumentService.approve`).
+- **§1.2 provenance-before-LLM** — the worker's `_persist_provenance` seam runs before `LLMClient.acompletion`. In T3 it is a no-op (no retrieval yet); the Context Assembler (T4) fills lineage/semantic/operational rows at that seam.
+- **§1.10 structured output** — `LLMClient` parses with `response_format.model_validate_json`; `GenerationOutput` uses `extra='ignore'` to drop unknown fields.
+- **§1.5 audit-in-txn** — `ai.job_created` / `ai.draft_persisted` / `ai.job_accepted` / `ai.job_rejected` written before commit.
+
+### 16.4 Decisions / scope notes
+
+- **Worker scope (T3):** the generation worker fully implements the job lifecycle + heartbeat + terminal states + SSE + semaphore-release for **document-producing** artifacts (srs/hld/lld/test_plan via `ARTIFACT_DOC_TYPE`). Work-item-producing artifacts (epic/story/task breakdowns, sprint plans) raise `UnsupportedArtifact` until their role profiles land (M1.T5/T6). Prompts are minimal placeholders; real prompts + retrieval context are T4/T5/T6. This is a forward-compatible seam, not throwaway.
+- **Reviewer RBAC:** accept/reject require `project_owner`/`scrum_master` (mirrors document approval); enqueue is any member, with the `may_invoke_agent` matrix enforced in the orchestrator (viewer/client_approver → `insufficient_role`).
+- **Best-effort queue/semaphore:** under ASGI-transport tests the lifespan doesn't run, so `arq_pool` is `None` → enqueue skips the arq dispatch and the semaphore falls back to `NullSemaphore`. PR CI needs no Redis; the worker/semaphore logic is tested directly. Live SSE pub/sub relay (beyond the state replay) is exercised only against a real Redis.
+- **New error** `InvalidJobState` (409) for accept/reject on a job not in `awaiting_review`.
+
+### 16.5 Deferrals
+
+- **Context Assembler + real provenance rows** — M1.T4 (fills the `_persist_provenance` seam; adds `lineage_chunks`).
+- **Role profiles (Architect/QA) + work-item artifacts** — M1.T5/T6 (plug real prompts/schemas/persist into the worker).
+- **Live end-to-end SSE + worker run under a real queue** — validated manually / smoke suite, not PR CI.

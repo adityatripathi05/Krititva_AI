@@ -154,12 +154,13 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 **Traces:** FR-4.6.2–4.6.10, NFR-5.2.5, NFR-5.3.1–5.3.2 · §LLD 2.2, §LLD 3.1, §LLD 5.7, §LLD 10
 **Effort:** L
 
-- **M1.T3.1** Migration 007: `ai_generation_jobs`, `ai_provenance`.
-- **M1.T3.2** `AIOrchestrator.enqueue` with all authorization checks.
-- **M1.T3.3** Redis semaphore for per-user AI job concurrency (default 3).
-- **M1.T3.4** SSE endpoint bridging Redis pub/sub with 15 s heartbeat and initial-state replay.
-- **M1.T3.5** `worker_heartbeat_sweeper` cron; failed-terminal-frame publisher.
-- **M1.T3.6** `accept` / `reject` endpoints with audit logging.
+- ✅ **M1.T3.1** Migration **0010** (roadmap said "007"; used numbers advanced): `ai_generation_jobs` (project-scoped; append-only after `finished_at`) + `ai_provenance` (append-only ledger). Resolves the last two deferred FKs: `work_items.source_job_id` and `document_versions.ai_job_id` → `ai_generation_jobs`.
+- ✅ **M1.T3.2** `AIOrchestrator.enqueue` (`app/services/ai_orchestrator.py`) with the full LLD §10 gate order: ai-disabled → agent-disabled → role/artifact → may-invoke → prereqs-approved → concurrency; each maps to a typed error. Authz lives in the service (single source of truth); the route only wires membership + queue + semaphore.
+- ✅ **M1.T3.3** Redis per-user concurrency semaphore (`app/ai/semaphore.py`, default `settings.user_ai_concurrency=3`) — atomic INCR/check/DECR with a TTL leak-guard; `NullSemaphore` fallback when Redis is absent (dev/test).
+- ✅ **M1.T3.4** SSE endpoint (`GET .../jobs/{jid}/events`) — replays current state to late subscribers, relays worker frames from Redis pub/sub (`app/ai/events.py`), 15 s heartbeat, `X-Accel-Buffering: no`.
+- ✅ **M1.T3.5** `worker_heartbeat_sweeper` arq cron (`app/workers/heartbeat.py`, every 30 s) → stuck `running` jobs (heartbeat > 60 s) become `failed` + terminal frame published.
+- ✅ **M1.T3.6** `accept` / `reject` (`app/services/ai_orchestrator.py` + routes) with audit. **Accept is the §1.1 human gate** — it approves the AI draft version, making it canonical; reject leaves it a draft.
+- ⚠️ Generation worker (`app/workers/generation.py`) delivers the full job lifecycle (running → provenance-first → LLM → **draft** → awaiting_review; failure → failed; heartbeat loop) for **document-producing** artifacts (srs/hld/lld/test_plan) via a `FakeLLMClient`-swappable `LLMClient`. Real prompts + Context Assembler + work-item artifacts land in M1.T4/T5/T6; provenance rows are written by the assembler (T4) at the ordering seam already in place.
 
 ### M1.T4 — Context Assembler
 **Deliverables:** Lineage-first + semantic + operational assembly with token-budget packing and provenance-before-call persistence.
