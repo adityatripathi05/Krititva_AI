@@ -7,8 +7,8 @@ of ``content_md``. Only ``status`` moves forward along
 ``draft → in_review → approved → superseded`` and ``approved_at`` is stamped.
 
 Every mutating method audits before the outer commit (§CLAUDE.md §1.5). The
-chunk+embed pipeline that ``create_version`` will enqueue lands in M1.T2; until
-then a new draft version is simply persisted.
+chunk+embed pipeline is enqueued by the route after the version commits (M1.T2,
+best-effort via the arq pool); this service only persists the version.
 """
 
 from __future__ import annotations

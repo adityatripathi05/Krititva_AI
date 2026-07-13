@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI
 from fastapi.responses import ORJSONResponse
 
@@ -17,13 +18,26 @@ from app.api.errors import register_exception_handlers
 from app.api.routes import auth, documents, health, projects, work_items
 from app.config import get_settings
 from app.db import dispose_engine
+from app.queue import create_arq_pool
 from app.security.csrf import CSRFMiddleware
+
+_log = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    yield
-    await dispose_engine()
+    try:
+        app.state.arq_pool = await create_arq_pool()
+    except Exception as exc:  # degrade gracefully if Redis is down
+        app.state.arq_pool = None
+        _log.warning("arq_pool_unavailable", error=str(exc))
+    try:
+        yield
+    finally:
+        pool = getattr(app.state, "arq_pool", None)
+        if pool is not None:
+            await pool.close()
+        await dispose_engine()
 
 
 def create_app() -> FastAPI:

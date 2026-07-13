@@ -11,9 +11,10 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_project_membership
+from app.api.deps import get_arq_pool, get_db, require_project_membership
 from app.api.errors import NotFound
 from app.models import Project, ProjectMember, ProjectRole, User
+from app.queue import enqueue_embed
 from app.schemas.document import (
     DocumentCreate,
     DocumentOut,
@@ -109,6 +110,7 @@ async def create_version(
     body: DocumentVersionCreate,
     member: tuple[User, ProjectMember] = Depends(require_project_membership(*_CONTRIBUTOR_ROLES)),
     db: AsyncSession = Depends(get_db),
+    arq_pool: object | None = Depends(get_arq_pool),
 ) -> DocumentVersionOut:
     actor, _ = member
     project = await _load_project(db, project_id)
@@ -124,6 +126,7 @@ async def create_version(
     )
     await db.commit()
     await db.refresh(version)
+    await enqueue_embed(arq_pool, version.id)
     return document_version_out(version)
 
 

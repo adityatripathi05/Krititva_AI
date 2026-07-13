@@ -29,6 +29,12 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         yield session
 
 
+def get_arq_pool(request: Request) -> object | None:
+    """The shared arq pool set at startup, or ``None`` when Redis is unavailable
+    (or under ASGI-transport tests that skip lifespan). Enqueueing is best-effort."""
+    return getattr(request.app.state, "arq_pool", None)
+
+
 def _extract_bearer(request: Request) -> str | None:
     header = request.headers.get("Authorization", "")
     scheme, _, token = header.partition(" ")
@@ -142,6 +148,7 @@ def require_agent_permission(
 
 __all__ = [
     "get_db",
+    "get_arq_pool",
     "get_current_user",
     "require_org_role",
     "require_project_membership",
