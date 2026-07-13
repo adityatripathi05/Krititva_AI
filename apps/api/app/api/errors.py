@@ -133,6 +133,11 @@ class VersionConflict(DomainError):
     code = "version_conflict"
 
 
+class InvalidDocumentState(DomainError):
+    http_status = 422
+    code = "invalid_document_state"
+
+
 class PrereqNotApproved(DomainError):
     http_status = 409
     code = "prereq_missing"
