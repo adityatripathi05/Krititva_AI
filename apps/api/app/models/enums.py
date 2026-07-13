@@ -77,6 +77,21 @@ class LinkType(str, Enum):
     relates_to = "relates_to"
 
 
+class DocType(str, Enum):
+    srs = "srs"
+    hld = "hld"
+    lld = "lld"
+    test_plan = "test_plan"
+    other = "other"
+
+
+class DocStatus(str, Enum):
+    draft = "draft"
+    in_review = "in_review"
+    approved = "approved"
+    superseded = "superseded"
+
+
 class GateStatus(str, Enum):
     pending = "pending"
     in_review = "in_review"
@@ -98,7 +113,7 @@ class SprintState(str, Enum):
     closed = "closed"
 
 
-# Names for the Postgres ENUM types. Kept in sync with migrations 001 + 005 + 006.
+# Names for the Postgres ENUM types. Kept in sync with migrations 001 + 006 + 008.
 PG_ENUM_NAMES = {
     OrgRole: "org_role",
     ProjectRole: "project_role",
@@ -109,4 +124,6 @@ PG_ENUM_NAMES = {
     LinkType: "link_type",
     GateStatus: "gate_status",
     StaleReason: "stale_reason",
+    DocType: "doc_type",
+    DocStatus: "doc_status",
 }

@@ -38,6 +38,8 @@ EXPECTED_TABLES = {
     "sprints",
     "milestones",
     "stale_flags",
+    "documents",
+    "document_versions",
 }
 
 EXPECTED_ENUMS = {
@@ -50,6 +52,8 @@ EXPECTED_ENUMS = {
     "link_type",
     "gate_status",
     "stale_reason",
+    "doc_type",
+    "doc_status",
 }
 
 

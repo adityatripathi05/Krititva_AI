@@ -3,7 +3,10 @@
 from app.models.audit_log import AuditEntry
 from app.models.base import Base
 from app.models.client import Client
+from app.models.document import Document, DocumentVersion
 from app.models.enums import (
+    DocStatus,
+    DocType,
     GateStatus,
     InvitationState,
     LinkType,
@@ -31,6 +34,10 @@ __all__ = [
     "AuditEntry",
     "Base",
     "Client",
+    "Document",
+    "DocumentVersion",
+    "DocStatus",
+    "DocType",
     "GateStatus",
     "InvitationState",
     "LinkType",
