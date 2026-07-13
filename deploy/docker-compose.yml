@@ -71,7 +71,7 @@ services:
       LITELLM_URL: http://litellm:4000
       KRITITVA_TELEMETRY_ENABLED: "false"
       KRITITVA_ENVIRONMENT: production
-      KRITITVA_JWT_SECRET: ${KRITITVA_JWT_SECRET:?set KRITITVA_JWT_SECRET in .env (copy .env.example)}
+      KRITITVA_JWT_SECRET: ${KRITITVA_JWT_SECRET:-}
       KRITITVA_DATA_KEY: ${KRITITVA_DATA_KEY:-}
     # Migrations run at api start, advisory-lock-serialized across replicas (FR-4.12.4).
     command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
@@ -104,7 +104,7 @@ services:
       LITELLM_URL: http://litellm:4000
       KRITITVA_TELEMETRY_ENABLED: "false"
       KRITITVA_ENVIRONMENT: production
-      KRITITVA_JWT_SECRET: ${KRITITVA_JWT_SECRET:?set KRITITVA_JWT_SECRET in .env (copy .env.example)}
+      KRITITVA_JWT_SECRET: ${KRITITVA_JWT_SECRET:-}
       KRITITVA_DATA_KEY: ${KRITITVA_DATA_KEY:-}
     volumes:
       - assets:/var/lib/krititva/assets
@@ -119,7 +119,10 @@ services:
     depends_on:
       - api
     environment:
-      NEXT_PUBLIC_API_URL: http://api:8000
+      # Server-only: the BFF route handlers + serverApi read KRITITVA_API_URL to
+      # reach the backend over the compose network (NOT NEXT_PUBLIC_*, which would
+      # inline into the client bundle). localhost here would be the web container.
+      KRITITVA_API_URL: http://api:8000
       NEXT_TELEMETRY_DISABLED: "1"
     ports:
       - "3000:3000"

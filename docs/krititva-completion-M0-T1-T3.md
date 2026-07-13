@@ -418,3 +418,29 @@ No SRS changes were required — M0.T6 satisfies UI-1 and UI-4.
 The end-to-end M0 slice stands: Postgres schema (6 migrations, 16 tables), Argon2id auth + JWT/refresh + RBAC (404-not-403), methodology-as-data project creation, the work-item engine (hierarchy, state machine, cycle-safe links, lexorank), the Next.js BFF shell (dashboard, board, backlog, settings), and first-run + operator tooling. Aggregate: **142 backend tests**, `mypy --strict` clean on 52 source files, frontend `build` clean. Live docker-compose smoke + Playwright E2E are the `main`-branch gates per CLAUDE.md §5.
 
 No SRS changes were required — M0.T7 satisfies FR-4.12.1–4.12.5 (4.12.2's optional model-pull deferred).
+
+---
+
+## 13. Post-M0 — peer review + first Docker bring-up (2026-07-13)
+
+After M0 was committed, two hardening passes ran before starting M1.
+
+### 13.1 End-to-end peer review — 13 bugs, all fixed
+
+Three parallel reviewers (auth/security, engine/data, frontend) + per-finding verification (the collation bug was confirmed against a live Postgres). All genuine; fixed priority-first. Test count **142 → 148** (+6 regression tests). Committed.
+
+- **HIGH #1 — lexorank collation:** `work_items.rank` was plain `TEXT`, inheriting the DB's `en_US.utf8` collation where `'a' < 'Z'` — the inverse of the algorithm's bytewise assumption. `ORDER BY`/`MAX(rank)` mis-sorted and `_append_rank` minted duplicate keys. Fix: migration **0007** → `rank TEXT COLLATE "C"` + model `Text(collation="C")` + a regression test that drives the a/Z boundary through the DB. Only reproducible via Postgres, never in the pure-Python property tests. See [feedback-lexorank-collation].
+- **HIGH #2 — server 401 handling:** RSC `serverApi` threw on 401; only `(app)/layout` caught it, so a client sub-navigation after token expiry hit Next's error page instead of re-auth. Fix: `serverApiAuthed` redirects 401/403 → `/login`, used across `(app)` pages.
+- **MED #3 — in-use safety inert:** `ProjectService._work_item_kinds_in_use` / `_parent_child_pairs_in_use` still returned `set()` after M0.T5 shipped, so FR-4.3.2 was silently unenforced (and reseed 500'd on the state FK). Fix: wired to real queries → 409 `config_in_use`.
+- **MED #4–6:** first-run `/setup` TOCTOU (added `pg_advisory_xact_lock`); open-redirect via `next=//host` (guarded); accepting an invite for an already-registered email → typed 409 (was an unhandled 500).
+- **LOW #7–13:** cross-project/non-member `assignee_id`/`sprint_id`/`milestone_id` validated (422 `invalid_reference`); login dummy-hash (timing oracle); prod fail-fast on default/empty `jwt_secret`; `/readyz` → 503 on DB down; BFF proxy header safelist; CSRF exact-path match; client 401 → `/login`.
+
+### 13.2 First Docker bring-up — ~10 deploy bugs, all fixed
+
+`deploy/docker-compose.yml` had never been run. Bringing it up (and the sign-up flow through the browser) surfaced real bugs, all fixed — see [feedback-docker-deploy] for the durable list. Headlines: web Dockerfile `adduser` uid collision; **missing root `.dockerignore`** (host `node_modules` clobbered the image's); `output: "standalone"` never enabled (gated behind `BUILD_STANDALONE=1`); api `uv sync` installed into `./.venv` not the shipped `/venv` (fixed with `UV_PROJECT_ENVIRONMENT=/venv` + copy `uv.lock`); `templates.py` `parents[4]` broke in the flattened container (now walks up for `packages/methodology-templates`, which is copied into the image); migrations wired into the api `command`; the worker crash-looped with zero arq functions (added a `ping` no-op); and the sign-up `ECONNREFUSED` — the web BFF read `KRITITVA_API_URL` but compose set only `NEXT_PUBLIC_API_URL`.
+
+**Verified:** `docker compose -f deploy/docker-compose.yml --env-file .env up -d --build` runs all 6 services; api auto-migrates at start; `POST http://localhost:3000/api/auth/setup` (through the web BFF) returns 200 and sets the HttpOnly cookies. Compose commands require `--env-file .env` (with `-f`, compose reads `.env` from the file's directory, not the repo root).
+
+### 13.3 Uncommitted at handoff
+
+The final deploy round is uncommitted (3 files): `apps/api/app/workers/arq_settings.py`, `apps/api/app/config.py`, `deploy/docker-compose.yml`. Commit before M1.

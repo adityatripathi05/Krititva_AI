@@ -86,8 +86,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _production_hardening(self) -> Settings:
-        if self.environment == "production" and self.jwt_secret == INSECURE_JWT_DEFAULT:
-            raise ValueError("KRITITVA_JWT_SECRET must be set to a non-default value in production")
+        if self.environment == "production" and self.jwt_secret in ("", INSECURE_JWT_DEFAULT):
+            raise ValueError(
+                "KRITITVA_JWT_SECRET must be set to a non-default, non-empty value in production"
+            )
         return self
 
 
