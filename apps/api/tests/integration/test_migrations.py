@@ -40,6 +40,7 @@ EXPECTED_TABLES = {
     "stale_flags",
     "documents",
     "document_versions",
+    "document_chunks",
 }
 
 EXPECTED_ENUMS = {

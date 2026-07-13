@@ -3,7 +3,7 @@
 from app.models.audit_log import AuditEntry
 from app.models.base import Base
 from app.models.client import Client
-from app.models.document import Document, DocumentVersion
+from app.models.document import Document, DocumentChunk, DocumentVersion
 from app.models.enums import (
     DocStatus,
     DocType,
@@ -35,6 +35,7 @@ __all__ = [
     "Base",
     "Client",
     "Document",
+    "DocumentChunk",
     "DocumentVersion",
     "DocStatus",
     "DocType",

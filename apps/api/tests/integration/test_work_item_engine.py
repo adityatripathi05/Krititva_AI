@@ -25,6 +25,10 @@ from app.api.errors import (
     NotFound,
 )
 from app.models import (
+    DocType,
+    Document,
+    DocumentChunk,
+    DocumentVersion,
     LinkType,
     OrgRole,
     Project,
@@ -242,13 +246,32 @@ async def test_link_target_missing(db_session: AsyncSession) -> None:
 
 
 async def test_link_to_chunk_skips_cycle_check(db_session: AsyncSession) -> None:
-    """to_chunk target (no to_item) — the ``to_item_id is None`` branch."""
+    """to_chunk target (no to_item) — the ``to_item_id is None`` branch.
+
+    ``work_item_links.to_chunk`` gained an FK to ``document_chunks`` in migration
+    0009, so the target must be a real chunk (a random UUID now violates it)."""
     ctx = await _ctx(db_session)
     a = await _new(ctx, "story", "A")
-    link = await ctx.svc.link(
-        ctx.project, a, None, uuid.uuid4(), LinkType.derived_from, ctx.admin_id
+    chunk_id = await _make_chunk(db_session, ctx.project.id, ctx.admin_id)
+    link = await ctx.svc.link(ctx.project, a, None, chunk_id, LinkType.derived_from, ctx.admin_id)
+    assert link.to_chunk == chunk_id
+
+
+async def _make_chunk(db: AsyncSession, project_id: uuid.UUID, actor_id: uuid.UUID) -> uuid.UUID:
+    doc = Document(project_id=project_id, doc_type=DocType.srs, title="d")
+    db.add(doc)
+    await db.flush()
+    version = DocumentVersion(
+        document_id=doc.id, version_no=1, content_md="x", content_hash="h", created_by=actor_id
     )
-    assert link.to_chunk is not None
+    db.add(version)
+    await db.flush()
+    chunk = DocumentChunk(
+        version_id=version.id, section_path="", content="x", content_hash="h", token_count=1
+    )
+    db.add(chunk)
+    await db.flush()
+    return chunk.id
 
 
 # ---- rerank ---------------------------------------------------------------

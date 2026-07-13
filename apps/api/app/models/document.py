@@ -18,6 +18,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -65,3 +66,29 @@ class DocumentVersion(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (UniqueConstraint("document_id", "version_no", name="uq_doc_versions_doc_no"),)
+
+
+class DocumentChunk(Base):
+    """A section-aware slice of a version's markdown (FR-4.5.4-4.5.6).
+
+    Append-only content (§CLAUDE.md §1.3): ``content`` / ``content_hash`` never
+    change. The embedding columns are discriminated by model — a chunk row is
+    inserted with a NULL vector and the embedding worker fills ``embedding`` +
+    ``embedding_model`` together (and optionally the 1536-dim ``embedding_alt``).
+    """
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    section_path: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding_alt: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    embedding_alt_model: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = created_at()
