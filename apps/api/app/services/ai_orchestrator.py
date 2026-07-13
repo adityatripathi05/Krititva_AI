@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.catalog import can_produce, may_invoke_agent, prereq_doc_types
+from app.ai.embeddings import DEFAULT_EMBEDDING_MODEL
 from app.ai.semaphore import AISemaphore
 from app.api.errors import (
     AgentDisabled,
@@ -46,7 +47,10 @@ from app.schemas.artifacts import GenerateArtifactRequest
 from app.services.audit import AuditSink
 from app.services.documents import DocumentService
 
-_DEFAULT_RETRIEVAL_MODEL = "nomic-embed-text-v1.5"
+# One source of truth for the retrieval model: chunks are embedded with this
+# (M1.T2) and the query is embedded + filtered with it (M1.T4), so they must be
+# identical for the semantic join to match.
+_DEFAULT_RETRIEVAL_MODEL = DEFAULT_EMBEDDING_MODEL
 
 
 @dataclass

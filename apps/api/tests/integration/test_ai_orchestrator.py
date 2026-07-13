@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.embeddings import FakeEmbeddingClient
 from app.ai.llm_client import FakeLLMClient
 from app.ai.semaphore import NullSemaphore
 from app.api.errors import (
@@ -44,7 +45,7 @@ from app.schemas.artifacts import GenerateArtifactRequest
 from app.services.ai_orchestrator import AIOrchestrator
 from app.services.audit import AuditSink
 from app.services.documents import DocumentService
-from app.workers.generation import UnsupportedArtifact, generate_draft
+from app.workers.generation import UnsupportedArtifact, assemble_context, generate_draft
 from app.workers.heartbeat import sweep_stuck_jobs
 from tests.integration._factories import make_member, make_org, make_project, make_user
 
@@ -203,7 +204,7 @@ async def test_enqueue_success_records_job_and_audit(db_session: AsyncSession) -
         NullSemaphore(),
     )
     assert job.status is JobStatus.queued
-    assert job.retrieval_model == "nomic-embed-text-v1.5"
+    assert job.retrieval_model == "nomic-embed-text"
     actions = (
         (await db_session.execute(select(AuditEntry.action).where(AuditEntry.entity == "ai_job")))
         .scalars()
@@ -227,10 +228,15 @@ async def _queued_job(ctx: Ctx, artifact: ArtifactType = ArtifactType.srs) -> AI
     )
 
 
+async def _draft(ctx: Ctx, job: AIGenerationJob) -> uuid.UUID:
+    assembled = await assemble_context(ctx.db, job, FakeEmbeddingClient())
+    return await generate_draft(ctx.db, job, assembled, FakeLLMClient())
+
+
 async def test_generate_draft_persists_draft_version(db_session: AsyncSession) -> None:
     ctx = await _ctx(db_session)
     job = await _queued_job(ctx)
-    version_id = await generate_draft(db_session, job, FakeLLMClient())
+    version_id = await _draft(ctx, job)
 
     version = await db_session.get(DocumentVersion, version_id)
     assert version is not None
@@ -254,7 +260,7 @@ async def test_generate_draft_unsupported_artifact(db_session: AsyncSession) -> 
     db_session.add(job)
     await db_session.flush()
     with pytest.raises(UnsupportedArtifact):
-        await generate_draft(db_session, job, FakeLLMClient())
+        await assemble_context(db_session, job, FakeEmbeddingClient())
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +270,7 @@ async def test_generate_draft_unsupported_artifact(db_session: AsyncSession) -> 
 
 async def _awaiting_job(ctx: Ctx) -> AIGenerationJob:
     job = await _queued_job(ctx)
-    await generate_draft(ctx.db, job, FakeLLMClient())
+    await _draft(ctx, job)
     job.status = JobStatus.awaiting_review
     await ctx.db.flush()
     return job

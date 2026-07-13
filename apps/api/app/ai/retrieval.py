@@ -48,3 +48,37 @@ async def semantic_search(
     if exclude_ids:
         stmt = stmt.where(DocumentChunk.id.not_in(list(exclude_ids)))
     return list((await db.execute(stmt)).scalars().all())
+
+
+async def semantic_search_scored(
+    db: AsyncSession,
+    *,
+    project_id: uuid.UUID,
+    doc_types: Sequence[DocType],
+    embedding_model: str,
+    query_vec: Sequence[float],
+    k: int = 20,
+    exclude_ids: Sequence[uuid.UUID] = (),
+) -> list[tuple[DocumentChunk, float]]:
+    """Like :func:`semantic_search` but also returns cosine similarity (1 -
+    distance) for each hit, so the Context Assembler can record it in provenance."""
+    if not doc_types or k <= 0:
+        return []
+    distance = DocumentChunk.embedding.cosine_distance(list(query_vec))
+    stmt = (
+        select(DocumentChunk, distance.label("distance"))
+        .join(DocumentVersion, DocumentVersion.id == DocumentChunk.version_id)
+        .join(Document, Document.current_version_id == DocumentVersion.id)
+        .where(
+            Document.project_id == project_id,
+            Document.doc_type.in_(list(doc_types)),
+            DocumentChunk.embedding_model == embedding_model,
+            DocumentChunk.embedding.is_not(None),
+        )
+        .order_by(distance)
+        .limit(k)
+    )
+    if exclude_ids:
+        stmt = stmt.where(DocumentChunk.id.not_in(list(exclude_ids)))
+    rows = (await db.execute(stmt)).all()
+    return [(chunk, 1.0 - float(dist)) for chunk, dist in rows]
