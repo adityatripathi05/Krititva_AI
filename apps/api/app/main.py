@@ -15,7 +15,7 @@ from fastapi.responses import ORJSONResponse
 
 from app import __version__
 from app.api.errors import register_exception_handlers
-from app.api.routes import auth, documents, health, projects, work_items
+from app.api.routes import artifacts, auth, documents, health, projects, work_items
 from app.config import get_settings
 from app.db import dispose_engine
 from app.queue import create_arq_pool
@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(projects.router, prefix=settings.api_prefix)
     app.include_router(work_items.router, prefix=settings.api_prefix)
     app.include_router(documents.router, prefix=settings.api_prefix)
+    app.include_router(artifacts.router, prefix=settings.api_prefix)
     return app
 
 

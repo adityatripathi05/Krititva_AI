@@ -1,14 +1,18 @@
-"""arq worker settings. Registers the chunk+embed pipeline (M1.T2.3)."""
+"""arq worker settings. Registers chunk+embed (M1.T2) and generation (M1.T3)."""
 
 from __future__ import annotations
 
 from typing import Any, ClassVar
 
+from arq import cron
 from arq.connections import RedisSettings
 
 from app.config import get_settings
 from app.workers.embed import chunk_and_embed
 from app.workers.embed import on_startup as _embed_startup
+from app.workers.generation import on_startup as _gen_startup
+from app.workers.generation import run_artifact_generation
+from app.workers.heartbeat import worker_heartbeat_sweeper
 
 
 def _redis_settings() -> RedisSettings:
@@ -16,22 +20,22 @@ def _redis_settings() -> RedisSettings:
 
 
 async def ping(ctx: dict[str, object]) -> str:
-    """No-op placeholder kept so the worker boots even with no queued jobs.
-
-    arq refuses to start with zero registered functions; this keeps the worker a
-    valid, idle service. Generation/SSE jobs join the list in M1.T3.
-    """
+    """No-op placeholder kept so the worker boots even with no queued jobs."""
     return "pong"
 
 
 async def startup(ctx: dict[str, Any]) -> None:
     await _embed_startup(ctx)
+    await _gen_startup(ctx)
 
 
 class WorkerSettings:
     """arq WorkerSettings — jobs registered by task modules as they land."""
 
-    functions: ClassVar[list[object]] = [ping, chunk_and_embed]  # + generation in M1.T3
+    functions: ClassVar[list[object]] = [ping, chunk_and_embed, run_artifact_generation]
+    cron_jobs: ClassVar[list[object]] = [
+        cron(worker_heartbeat_sweeper, second={0, 30}, run_at_startup=False)
+    ]
     on_startup = startup
     redis_settings = _redis_settings()
     max_jobs = 10

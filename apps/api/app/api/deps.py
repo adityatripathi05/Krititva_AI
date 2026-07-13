@@ -15,7 +15,9 @@ from fastapi import Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.semaphore import AISemaphore, NullSemaphore, RedisAISemaphore
 from app.api.errors import InsufficientRole, InvalidToken, NotFound
+from app.config import get_settings
 from app.db import get_session_factory
 from app.models import OrgRole, ProjectMember, ProjectRole, User
 from app.security.jwt import InvalidToken as JWTInvalidToken
@@ -33,6 +35,16 @@ def get_arq_pool(request: Request) -> object | None:
     """The shared arq pool set at startup, or ``None`` when Redis is unavailable
     (or under ASGI-transport tests that skip lifespan). Enqueueing is best-effort."""
     return getattr(request.app.state, "arq_pool", None)
+
+
+def get_user_ai_semaphore(request: Request) -> AISemaphore:
+    """Per-user AI concurrency limiter. Falls back to a no-op limiter when Redis
+    is absent (dev/test); production always has the arq pool, so the real
+    per-user cap applies there (NFR-5.2.5)."""
+    pool = getattr(request.app.state, "arq_pool", None)
+    if pool is None:
+        return NullSemaphore()
+    return RedisAISemaphore(pool, get_settings().user_ai_concurrency)
 
 
 def _extract_bearer(request: Request) -> str | None:
@@ -149,6 +161,7 @@ def require_agent_permission(
 __all__ = [
     "get_db",
     "get_arq_pool",
+    "get_user_ai_semaphore",
     "get_current_user",
     "require_org_role",
     "require_project_membership",
