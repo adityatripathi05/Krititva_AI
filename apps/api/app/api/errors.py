@@ -148,6 +148,11 @@ class TooManyInFlight(DomainError):
     code = "job_concurrency_limit"
 
 
+class InvalidJobState(DomainError):
+    http_status = 409
+    code = "invalid_job_state"
+
+
 # ---- Registration -------------------------------------------------------
 
 
