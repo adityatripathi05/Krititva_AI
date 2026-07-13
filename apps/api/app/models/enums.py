@@ -105,6 +105,36 @@ class StaleReason(str, Enum):
     chunk_added_upstream = "chunk_added_upstream"
 
 
+class AgentRole(str, Enum):
+    project_owner = "project_owner"
+    architect = "architect"
+    scrum_master = "scrum_master"
+    developer = "developer"
+    qa = "qa"
+
+
+class ArtifactType(str, Enum):
+    srs = "srs"
+    epic_breakdown = "epic_breakdown"
+    hld = "hld"
+    lld = "lld"
+    sprint_plan = "sprint_plan"
+    story_breakdown = "story_breakdown"
+    task_breakdown = "task_breakdown"
+    api_contract = "api_contract"
+    test_plan = "test_plan"
+    test_cases = "test_cases"
+
+
+class JobStatus(str, Enum):
+    queued = "queued"
+    running = "running"
+    awaiting_review = "awaiting_review"
+    accepted = "accepted"
+    rejected = "rejected"
+    failed = "failed"
+
+
 class SprintState(str, Enum):
     """CHECK-constrained in the DB (sprints.state), modeled for services."""
 
@@ -126,4 +156,7 @@ PG_ENUM_NAMES = {
     StaleReason: "stale_reason",
     DocType: "doc_type",
     DocStatus: "doc_status",
+    AgentRole: "agent_role",
+    ArtifactType: "artifact_type",
+    JobStatus: "job_status",
 }

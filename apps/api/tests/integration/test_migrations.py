@@ -41,6 +41,8 @@ EXPECTED_TABLES = {
     "documents",
     "document_versions",
     "document_chunks",
+    "ai_generation_jobs",
+    "ai_provenance",
 }
 
 EXPECTED_ENUMS = {
@@ -55,6 +57,9 @@ EXPECTED_ENUMS = {
     "stale_reason",
     "doc_type",
     "doc_status",
+    "agent_role",
+    "artifact_type",
+    "job_status",
 }
 
 

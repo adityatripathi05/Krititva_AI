@@ -1,14 +1,18 @@
 """SQLAlchemy ORM models. Import here so Alembic and services get one entrypoint."""
 
+from app.models.ai import AIGenerationJob, AIProvenance
 from app.models.audit_log import AuditEntry
 from app.models.base import Base
 from app.models.client import Client
 from app.models.document import Document, DocumentChunk, DocumentVersion
 from app.models.enums import (
+    AgentRole,
+    ArtifactType,
     DocStatus,
     DocType,
     GateStatus,
     InvitationState,
+    JobStatus,
     LinkType,
     Methodology,
     OrgRole,
@@ -31,6 +35,11 @@ from app.models.work_item import WorkItem, WorkItemLink
 from app.models.workflow import HierarchyRule, WorkflowState, WorkflowTransition
 
 __all__ = [
+    "AIGenerationJob",
+    "AIProvenance",
+    "AgentRole",
+    "ArtifactType",
+    "JobStatus",
     "AuditEntry",
     "Base",
     "Client",
