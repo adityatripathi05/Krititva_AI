@@ -132,11 +132,11 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 **Traces:** FR-4.5.1–4.5.4, FR-4.5.7–4.5.9, FR-4.10.4 · §LLD 2.2 (documents), §LLD 3.1 (DocumentService), §LLD 4.7
 **Effort:** L
 
-- **M1.T1.1** Migration 005: `documents`, `document_versions` with `content_hash`.
-- **M1.T1.2** `DocumentService.create_version` with optimistic lock on `base_version_id`.
-- **M1.T1.3** `approve` enforcing single-approved invariant (partial unique index).
-- **M1.T1.4** PDF export via headless renderer (Mermaid pre-rendered to SVG).
-- **M1.T1.5** Frontend DocumentEditor (TipTap) with Markdown, Mermaid preview, version-history panel.
+- ✅ **M1.T1.1** Migration **0008** (roadmap said "005"; 0001–0007 were used): `documents`, `document_versions` with `content_hash`. Resolves the `documents ↔ document_versions` FK cycle via deferred `fk_current_version`; adds the deferred `stale_flags.triggered_by → document_versions` FK; single-approved partial unique index `idx_doc_one_approved`.
+- ✅ **M1.T1.2** `DocumentService.create_version` with optimistic lock on `base_version_id` (head = latest `version_no`; stale/None-mismatch → `version_conflict` 409). Append-only; drafts never touch `current_version_id`.
+- ✅ **M1.T1.3** `approve` enforcing single-approved invariant (partial unique index + supersede-prior); sets `documents.current_version_id` to the approved version. Approver RBAC = owner/scrum_master.
+- ⚠️ **M1.T1.4** PDF export via headless renderer (Mermaid pre-rendered to SVG). **Deferred** — needs a headless-render runtime dep (license review per §1.7). Route path reserved.
+- ⚠️ **M1.T1.5** Frontend DocumentEditor (TipTap) with Markdown, Mermaid preview, version-history panel. **Deferred** — TipTap/Mermaid deps need AGPL-compat check per §1.7/§14.
 
 ### M1.T2 — Chunking + embedding pipeline
 **Deliverables:** Section-aware chunker, embedding worker, discriminated `embedding` + `embedding_model` (+ optional `embedding_alt`).

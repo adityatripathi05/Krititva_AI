@@ -443,4 +443,47 @@ Three parallel reviewers (auth/security, engine/data, frontend) + per-finding ve
 
 ### 13.3 Uncommitted at handoff
 
-The final deploy round is uncommitted (3 files): `apps/api/app/workers/arq_settings.py`, `apps/api/app/config.py`, `deploy/docker-compose.yml`. Commit before M1.
+The final deploy round is uncommitted (3 files): `apps/api/app/workers/arq_settings.py`, `apps/api/app/config.py`, `deploy/docker-compose.yml`. Commit before M1. *(Resolved: committed as `e08f02d` before M1.T1 started.)*
+
+---
+
+## 14. M1.T1 — Document service + versioning (2026-07-13)
+
+**Status:** Backend delivered. Test count **167 / 167** (was 148): +11 direct-service (`test_documents_service.py`), +8 HTTP (`test_documents.py`). `mypy --strict` clean on 55 source files; ruff clean. Traces: FR-4.5.1–4.5.4, FR-4.5.7–4.5.9, FR-4.10.4 · LLD §2.2 (documents), §2.3 (ordering), §3.1 (DocumentService), §4.7.
+
+### 14.1 Subtask delivery
+
+Legend: ✅ delivered · ⚠️ caveat/deferred · ➕ beyond scope
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M1.T1.1 Migration **0008** | ✅ | `documents` + `document_versions`. Roadmap said "005" — 0001–0007 were used, so this is **0008**. Enums `doc_type` / `doc_status` created first. `documents ↔ document_versions` cycle resolved via `fk_current_version` added after both tables exist (LLD §2.3). Deferred FK `stale_flags.triggered_by → document_versions` now resolved. `document_versions` is append-only (no `updated_at`). `ai_job_id` stays a plain UUID until M1.T3 (`fk_dv_ai_job`). |
+| M1.T1.2 `create_version` | ✅ | Optimistic lock: head = latest `version_no`. `base_version_id` must equal head id (or both `None` when no versions exist), else `VersionConflict` (409, `version_conflict`) with `head_version_id`/`head_version_no` detail. Append-only; content SHA-256 hashed; a draft never mutates `current_version_id`. |
+| M1.T1.3 `approve` | ✅ | Single-approved invariant via partial unique index `idx_doc_one_approved` + supersede-prior (status → `superseded`, an allowed forward transition per §1.3). Sets `documents.current_version_id` to the approved version (the canonical pointer the retrieval join reads, LLD line 833). Only `draft`/`in_review` are approvable → else `InvalidDocumentState` (422). |
+| M1.T1.4 PDF export | ⚠️ | **Deferred, pending your decision.** Needs a headless-render runtime dep (WeasyPrint / Playwright-chromium) whose license needs review per §1.7/§14. `GET .../export.pdf` path reserved, not wired. |
+| M1.T1.5 Frontend DocumentEditor | ⚠️ | **Deferred, pending your decision.** TipTap + Mermaid.js are new frontend runtime deps needing AGPL-compat check per §1.7/§14. |
+
+### 14.2 Endpoints live (added this task)
+
+```
+POST   /api/v1/projects/{id}/documents
+GET    /api/v1/projects/{id}/documents
+GET    /api/v1/projects/{id}/documents/{did}
+POST   /api/v1/projects/{id}/documents/{did}/versions
+GET    /api/v1/projects/{id}/documents/{did}/versions
+GET    /api/v1/projects/{id}/documents/{did}/versions/{vid}
+POST   /api/v1/projects/{id}/documents/{did}/versions/{vid}/approve
+```
+
+### 14.3 Decisions / notes
+
+- **`current_version_id` = the approved (canonical) version**, not the latest draft — confirmed against the retrieval join in LLD §? (`JOIN documents d ON d.current_version_id = v.id`) and the "prerequisite reads `status='approved'`" delta (LLD §10). `create` leaves it NULL; drafts don't touch it; `approve` sets it.
+- **RBAC (LLD-unspecified, decided here):** authoring documents + drafting versions = contributor roles (owner/scrum_master/developer/qa); **approving = owner/scrum_master only** (canonical mutation, mirrors draft-and-review §1.1). Revisit if M2 quorum work reclassifies doc approval.
+- **New typed error** `InvalidDocumentState` (422, `invalid_document_state`) for approving a non-`draft`/`in_review` version. Not in the LLD §3.2 table; internal taxonomy addition.
+- **`approved_at`** stamped with app-clock `datetime.now(UTC)` (no server default on that column).
+
+### 14.4 Deferrals
+
+- **Chunk+embed enqueue on `create_version`** — the LLD contract says `create_version` "enqueues chunk+embed job". The chunker + embedding worker + `document_chunks` table are **M1.T2**; until then a draft version is simply persisted. `get_chunks_for_retrieval` (LLD §3.1) also lands with M1.T2.
+- **`lineage_chunks` SQL function** — now unblockable (its `document_chunks` JOIN target arrives in M1.T2, not T1). Still deferred to M1.T4.1 per the handoff.
+- **PDF export (T1.4) and DocumentEditor (T1.5)** — see §14.1; both blocked on new-dependency license review (§14 stop-and-ask).
