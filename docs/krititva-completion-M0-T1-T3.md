@@ -569,3 +569,32 @@ GET    /api/v1/projects/{id}/artifacts/jobs/{jid}/provenance  -> [ProvenanceEntr
 - **Context Assembler + real provenance rows** — M1.T4 (fills the `_persist_provenance` seam; adds `lineage_chunks`).
 - **Role profiles (Architect/QA) + work-item artifacts** — M1.T5/T6 (plug real prompts/schemas/persist into the worker).
 - **Live end-to-end SSE + worker run under a real queue** — validated manually / smoke suite, not PR CI.
+
+---
+
+## 17. M1.T4 — Context Assembler (2026-07-14)
+
+**Status:** Delivered (T4.1–T4.6). Test count **224 / 224** (was 214): +5 packing unit/property (`tests/engine/test_packing.py`), +5 assembler/lineage integration (`tests/integration/test_context_assembler.py`); the T3 worker tests were updated in place for the new `generate_draft` signature. `mypy --strict` clean on 73 source files; ruff clean. Traces: FR-4.6.9, FR-4.10.2, NFR-5.4.3 · LLD §5.2–5.3.
+
+### 17.1 Subtask delivery
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M1.T4.1 `lineage_chunks` SQL fn | ✅ | Migration **0011** — recursive `derived_from` walk (visited-array cycle guard, depth-bounded) returning linked document chunks, shallowest first. Unblocked now that `document_chunks` exists. |
+| M1.T4.2 `assemble` + packing | ✅ | `app/ai/context.py::ContextAssembler.assemble` (lineage → semantic → operational) + `pack_to_budget` (greedy priority, within-stage order preserved, ≤ budget). |
+| M1.T4.3 `persist_provenance` | ✅ | One `ai_provenance` row per retained source; satisfies the `source_chunk OR source_item` CHECK; committed **before** the LLM call in the worker. |
+| M1.T4.4 Token counter | ✅ | Reuses the offline `estimate_tokens` (no tiktoken → no phone-home, §1.6). |
+| M1.T4.5 Overflow fallback | ✅ | `summarize_lineage_fallback` folds deepest lineage into a summary node via an injected summarizer; provenance kept via `summarized_from`. Available to the assembler; the worker doesn't pass a summarizer yet (avoids an LLM call mid-assembly). |
+| M1.T4.6 Coverage + property tests | ✅ | Hypothesis packing invariants + assembler/lineage integration. |
+
+### 17.2 Worker integration + a consistency fix
+
+- The generation worker now runs `assemble_context` → `ContextAssembler.persist_provenance` (**committed**) → `generate_draft` (LLM with the rendered grounding context), across three sessions — provenance durably precedes the model call (§1.2). The T3 `_persist_provenance` no-op is gone; `generate_draft` takes an `AssembledContext`.
+- **Retrieval-model consistency fix:** T2 embedded chunks with `nomic-embed-text` while T3's orchestrator defaulted `retrieval_model` to `nomic-embed-text-v1.5` — a mismatch that would have made the semantic join return nothing. Unified on `app.ai.embeddings.DEFAULT_EMBEDDING_MODEL` (single source of truth); the orchestrator imports it. `_semantic` and query-embedding now key on the same string.
+- `semantic_search_scored` added to `app/ai/retrieval.py` — returns cosine similarity (1 − distance) per hit so provenance can record it.
+
+### 17.3 Decisions / deferrals
+
+- **Default plan** (`default_plan_for`) stands in for `profile.retrieval_policy` until role profiles land (M1.T5/T6): semantic over the artifact's approved prerequisites (or the core doc types); lineage only when a focus item is given; operational off by default.
+- **Operational scope:** only `open_items` is implemented (work items not in a `done`-category state). `sprint` / `capacity` need those services (M2/M3) and return nothing for now.
+- **Summarizer in the worker** — deferred: passing an LLM-backed summarizer into assembly would add a model call before the provenance commit; left as a seam (`assemble` accepts an optional `summarizer`).

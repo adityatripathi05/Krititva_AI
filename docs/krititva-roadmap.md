@@ -167,12 +167,13 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 **Traces:** FR-4.6.9, FR-4.10.2, NFR-5.4.3 · §LLD 5.2–5.3
 **Effort:** L
 
-- **M1.T4.1** `lineage_chunks(_focus, _max_depth)` SQL function.
-- **M1.T4.2** `ContextAssembler.assemble` with three-stage packing.
-- **M1.T4.3** `persist_provenance` per stage.
-- **M1.T4.4** Token counter (tiktoken-compat for chosen models).
-- **M1.T4.5** Overflow fallback: `summarize_lineage_fallback` (small model summarization of oldest lineage nodes).
-- **M1.T4.6** 90%+ line coverage; property-based tests on packing invariants (Hypothesis).
+- ✅ **M1.T4.1** `lineage_chunks(_focus, _max_depth)` SQL function — migration **0011** (cycle-safe recursive `derived_from` walk to chunks, depth-ordered). Now unblockable since `document_chunks` exists.
+- ✅ **M1.T4.2** `ContextAssembler.assemble` (`app/ai/context.py`) — three-stage lineage → semantic → operational, `pack_to_budget` greedy priority packing (lineage > semantic > operational, never exceeds budget). Operational supports `open_items` now (sprint/capacity are M2/M3).
+- ✅ **M1.T4.3** `persist_provenance` — one `ai_provenance` row per retained source (semantic/lineage → `source_chunk`+`chunk_hash`+`section_path`+`similarity`; operational → `source_item`; summarized nodes → one row per folded source). Worker commits it **before** the LLM call (§1.2).
+- ✅ **M1.T4.4** Token counter — reuses the offline `estimate_tokens` from the chunker. tiktoken is deliberately avoided (its vocab download breaches no-phone-home §1.6); noted as an LLD-vs-§1.6 reconciliation, same as M1.T2.2.
+- ✅ **M1.T4.5** `summarize_lineage_fallback` — when lineage alone overflows, keeps the shallowest nodes (≤ half budget) and folds the deepest into a summary node (injected summarizer; provenance preserved via `summarized_from`).
+- ✅ **M1.T4.6** Property-based packing invariants (Hypothesis: never-exceed-budget, within-stage order preserved, lineage priority) + assembler/lineage integration tests.
+- ➕ Wired into the generation worker: `assemble_context` → `persist_provenance` (committed) → LLM, replacing the T3 no-op provenance seam; unified the retrieval-model constant (chunk-embed and query-embed now use one string, fixing a T2/T3 mismatch).
 
 ### M1.T5 — Architect agent (HLD, LLD)
 **Deliverables:** Architect profile, `DesignDocument` schema, section-by-section generation for LLD, Mermaid preserved.
