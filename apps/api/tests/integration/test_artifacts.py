@@ -14,6 +14,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.embeddings import FakeEmbeddingClient
 from app.ai.llm_client import FakeLLMClient
 from app.models import (
     AgentRole,
@@ -30,7 +31,7 @@ from app.schemas.artifacts import GenerateArtifactRequest
 from app.security.jwt import encode_access_token
 from app.services.ai_orchestrator import AIOrchestrator
 from app.services.audit import AuditSink
-from app.workers.generation import generate_draft
+from app.workers.generation import assemble_context, generate_draft
 from tests.integration._factories import make_member, make_org, make_user
 
 pytestmark = pytest.mark.integration
@@ -99,7 +100,8 @@ async def _seed_awaiting_job(db: AsyncSession, seed: Seed) -> AIGenerationJob:
         ),
         _Null(),
     )
-    await generate_draft(db, job, FakeLLMClient())
+    assembled = await assemble_context(db, job, FakeEmbeddingClient())
+    await generate_draft(db, job, assembled, FakeLLMClient())
     job.status = JobStatus.awaiting_review
     await db.commit()
     return job
