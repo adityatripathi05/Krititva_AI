@@ -143,11 +143,11 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 **Traces:** FR-4.5.4–4.5.6, NFR-5.1.3, NFR-5.1.5 · §LLD 2.2 (document_chunks), §HLD 5.4
 **Effort:** M
 
-- **M1.T2.1** Migration 006: `document_chunks` with dual-column embeddings and HNSW indexes.
-- **M1.T2.2** Chunker: split on H1–H4, tag `section_path`, compute `content_hash` and `token_count`.
-- **M1.T2.3** Embedding worker (arq): consumes chunk batches, calls Ollama `/api/embeddings`, writes back.
-- **M1.T2.4** Retrieval query helper filtered by (project, approved current, embedding_model).
-- **M1.T2.5** Load test: 10k-chunk corpus, top-20 retrieval < 150 ms p95 (§NFR-5.1.3).
+- ✅ **M1.T2.1** Migration **0009** (roadmap said "006"; used numbers advanced): creates the `vector` extension, `document_chunks` with discriminated embeddings (`embedding vector(768)` + `embedding_model`, optional `embedding_alt vector(1536)` + `embedding_alt_model`), partial HNSW indexes, and resolves the deferred `work_item_links.to_chunk → document_chunks` FK.
+- ✅ **M1.T2.2** Chunker (`app/ai/chunking.py`): splits on H1–H4, tags `section_path` breadcrumb, SHA-256 `content_hash`. `token_count` uses an **offline** estimator — tiktoken is avoided because its vocab download would breach the no-phone-home default (§1.6). Property-tested (Hypothesis).
+- ✅ **M1.T2.3** Embedding worker (arq `chunk_and_embed`, `app/workers/embed.py` + `app/ai/pipeline.py`): chunks a version once, embeds via the `EmbeddingClient` (LiteLLM→Ollama `nomic-embed-text`), writes back `embedding` + `embedding_model`. Idempotent. `create_version` enqueues it best-effort via the app arq pool. `FakeEmbeddingClient` drives tests.
+- ✅ **M1.T2.4** Retrieval helper `app/ai/retrieval.py::semantic_search` filtered by (project, approved-current version via `current_version_id`, embedding_model), ranked by cosine distance on the HNSW index.
+- ⚠️ **M1.T2.5** Load test (10k-chunk corpus, top-20 < 150 ms p95, §NFR-5.1.3). **Deferred** to a tagged perf suite — an NFR gate, not PR-CI unit work (mirrors the real-Ollama/E2E-on-main policy, §5). Retrieval query + HNSW index are in place to satisfy it.
 
 ### M1.T3 — AI Orchestrator + SSE
 **Deliverables:** `ai_generation_jobs`, `ai_provenance`, enqueue endpoint, SSE stream, heartbeat sweeper, per-user semaphore.

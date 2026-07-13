@@ -487,3 +487,37 @@ POST   /api/v1/projects/{id}/documents/{did}/versions/{vid}/approve
 - **Chunk+embed enqueue on `create_version`** — the LLD contract says `create_version` "enqueues chunk+embed job". The chunker + embedding worker + `document_chunks` table are **M1.T2**; until then a draft version is simply persisted. `get_chunks_for_retrieval` (LLD §3.1) also lands with M1.T2.
 - **`lineage_chunks` SQL function** — now unblockable (its `document_chunks` JOIN target arrives in M1.T2, not T1). Still deferred to M1.T4.1 per the handoff.
 - **PDF export (T1.4) and DocumentEditor (T1.5)** — see §14.1; both blocked on new-dependency license review (§14 stop-and-ask).
+
+---
+
+## 15. M1.T2 — Chunking + embedding pipeline (2026-07-13)
+
+**Status:** Delivered (T2.1–T2.4; T2.5 deferred to a perf suite). Test count **184 / 184** (was 167): +12 chunker unit/property (`tests/engine/test_chunking.py`), +5 pipeline/retrieval integration (`tests/integration/test_embedding_pipeline.py`). `mypy --strict` clean on 62 source files; ruff clean. Traces: FR-4.5.4–4.5.6, NFR-5.1.3, NFR-5.1.5 · LLD §2.2 (document_chunks), HLD §5.4.
+
+### 15.1 Subtask delivery
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M1.T2.1 Migration **0009** | ✅ | `CREATE EXTENSION vector` (first use), `document_chunks` (discriminated embeddings, append-only — no `updated_at`), partial HNSW indexes `idx_chunks_embedding` / `idx_chunks_embedding_alt` (`m=16, ef_construction=64`, `WHERE embedding[_alt] IS NOT NULL`), deferred FK `fk_link_chunk` (`work_item_links.to_chunk`) resolved. |
+| M1.T2.2 Chunker | ✅ | `app/ai/chunking.py::chunk_markdown` — H1–H4 split, `section_path` breadcrumb (stack pops on same-or-shallower heading), preamble → empty path, SHA-256 hash. Property-tested. |
+| M1.T2.3 Embed worker | ✅ | `app/ai/pipeline.py::run_chunk_and_embed` (core) + `app/workers/embed.py::chunk_and_embed` (arq wrapper, own session per §4.1) + `app/ai/embeddings.py` (`EmbeddingClient` protocol, `LiteLLMEmbeddingClient`, `FakeEmbeddingClient`). Registered in `WorkerSettings.functions`. Idempotent (chunk-once, embed-missing). |
+| M1.T2.4 Retrieval | ✅ | `app/ai/retrieval.py::semantic_search` — joins `documents.current_version_id` (approved-only), filters project + doc_types + embedding_model, ranks by `embedding.cosine_distance`. |
+| M1.T2.5 Load test | ⚠️ | **Deferred** to a tagged perf suite (NFR gate, not PR-CI unit work). |
+
+### 15.2 New dependencies (license-checked, §1.7)
+
+- **`pgvector`** (Python SQLAlchemy binding) — pinned `>=0.5.0,<0.6`. License: **MIT**. Note: 0.3.x installs as a PEP 420 namespace package that pytest's sys.path handling breaks under this uv/Windows setup; 0.5.0 ships a regular package, so we pin ≥0.5.0. See [[feedback-uv-sync-all-extras]].
+- No tiktoken: it downloads its BPE vocab from the network on first use, which would violate the no-phone-home default (§1.6). Token counting uses a deterministic offline estimator instead.
+
+### 15.3 Decisions / notes
+
+- **`embedding_model` nullable** — LLD §2.1 delta note (4) says NOT NULL, but the definitive DDL block in §2.2 lists it nullable, which the chunk-then-embed flow requires (rows inserted before the vector exists). Followed §2.2. `embedding` + `embedding_model` are written together by the worker.
+- **Enqueue trigger** — `create_version` enqueues `chunk_and_embed` after commit via a best-effort app arq pool (`app/queue.py`, `get_arq_pool` dep). Under ASGI-transport tests the lifespan doesn't run, so the pool is absent and enqueue is skipped — no Redis needed in PR CI. If Redis is down in production the request still succeeds; the job is simply not queued.
+- **Token counting** — offline word/punctuation estimator (`estimate_tokens`); tracks BPE closely enough for chunk-packing budgets without a phone-home.
+- **`get_chunks_for_retrieval` (LLD §3.1)** — the concrete retrieval lives in `semantic_search`; the DocumentService wrapper + Context Assembler integration land with the role profiles (M1.T4+).
+
+### 15.4 Deferrals
+
+- **M1.T2.5 load test** — see §15.1.
+- **Project-level embedding-model selection** — the pipeline uses `DEFAULT_EMBEDDING_MODEL` (`nomic-embed-text`) until `llm_config` is wired to projects; the retrieval filter already keys on `embedding_model` so per-project models drop in cleanly.
+- **`lineage_chunks` SQL function** — now fully unblockable (`document_chunks` exists); still slated M1.T4.1.
