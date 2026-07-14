@@ -42,6 +42,7 @@ from app.models import (
     JobStatus,
     Project,
     ProjectMember,
+    WorkItem,
 )
 from app.schemas.artifacts import GenerateArtifactRequest
 from app.services.audit import AuditSink
@@ -57,6 +58,7 @@ _DEFAULT_RETRIEVAL_MODEL = DEFAULT_EMBEDDING_MODEL
 class AcceptOutcome:
     job_id: uuid.UUID
     document_version_id: uuid.UUID | None
+    work_item_ids: list[uuid.UUID]
 
 
 class AIOrchestrator:
@@ -193,6 +195,14 @@ class AIOrchestrator:
                 await docs.approve(project, document, version.id, actor_id)
             approved_version_id = version.id
 
+        # Work-item-producing agents (e.g. QA test_cases) mark their output
+        # ``ai_generated=TRUE`` — the draft state of a work item (FR-4.6.5).
+        # Accepting is the explicit human action that makes it canonical (§1.1,
+        # FR-4.6.6), so clear the draft flag on this job's items.
+        promoted = await self._job_work_items(job.id)
+        for item in promoted:
+            item.ai_generated = False
+
         job.status = JobStatus.accepted
         await self.audit.write(
             action="ai.job_accepted",
@@ -201,10 +211,21 @@ class AIOrchestrator:
             actor_id=actor_id,
             organization_id=project.organization_id,
             project_id=project.id,
-            detail={"document_version": str(approved_version_id) if approved_version_id else None},
+            detail={
+                "document_version": str(approved_version_id) if approved_version_id else None,
+                "work_items": [str(i.id) for i in promoted],
+            },
         )
         await self.db.flush()
-        return AcceptOutcome(job_id=job.id, document_version_id=approved_version_id)
+        return AcceptOutcome(
+            job_id=job.id,
+            document_version_id=approved_version_id,
+            work_item_ids=[i.id for i in promoted],
+        )
+
+    async def _job_work_items(self, job_id: uuid.UUID) -> list[WorkItem]:
+        stmt = select(WorkItem).where(WorkItem.source_job_id == job_id)
+        return list((await self.db.execute(stmt)).scalars().all())
 
     # -----------------------------------------------------------------
     # Reject (human discards the AI draft; it stays non-canonical)
@@ -216,6 +237,13 @@ class AIOrchestrator:
         self._require_awaiting_review(job)
         if not reason.strip():
             raise RejectRequiresReason("a rejection reason is required")
+
+        # Discard any work items this job produced — they were never canonical
+        # and the human has rejected them (§1.1). Links cascade on delete.
+        discarded = await self._job_work_items(job.id)
+        for item in discarded:
+            await self.db.delete(item)
+
         job.status = JobStatus.rejected
         await self.audit.write(
             action="ai.job_rejected",
@@ -224,7 +252,7 @@ class AIOrchestrator:
             actor_id=actor_id,
             organization_id=project.organization_id,
             project_id=project.id,
-            detail={"reason": reason[:500]},
+            detail={"reason": reason[:500], "discarded_work_items": len(discarded)},
         )
         await self.db.flush()
 

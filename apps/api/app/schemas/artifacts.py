@@ -107,6 +107,7 @@ class JobStatusOut(BaseModel):
 class AcceptResult(BaseModel):
     job_id: uuid.UUID
     document_version_id: uuid.UUID | None
+    work_item_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class RejectRequest(BaseModel):

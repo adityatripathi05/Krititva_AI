@@ -379,6 +379,55 @@ async def test_sweeper_fails_stuck_running_job(db_session: AsyncSession) -> None
     assert job.status is JobStatus.failed
 
 
+class _RecordingSemaphore:
+    def __init__(self) -> None:
+        self.released: list[uuid.UUID] = []
+
+    async def try_acquire(self, user_id: uuid.UUID) -> bool:
+        return True
+
+    async def release(self, user_id: uuid.UUID) -> None:
+        self.released.append(user_id)
+
+
+async def test_sweeper_fails_orphaned_queued_job_and_releases_slot(
+    db_session: AsyncSession,
+) -> None:
+    ctx = await _ctx(db_session)
+    job = AIGenerationJob(
+        project_id=ctx.project.id,
+        requested_by=ctx.actor_id,
+        agent_role=AgentRole.project_owner,
+        target_artifact=ArtifactType.srs,
+        status=JobStatus.queued,
+        created_at=datetime.now(UTC) - timedelta(seconds=600),  # older than the queued grace
+    )
+    db_session.add(job)
+    await db_session.flush()
+    sem = _RecordingSemaphore()
+    swept = await sweep_stuck_jobs(db_session, redis=None, semaphore=sem)
+    assert job.id in swept
+    await db_session.refresh(job)
+    assert job.status is JobStatus.failed
+    assert ctx.actor_id in sem.released  # concurrency slot reclaimed
+
+
+async def test_sweeper_leaves_fresh_queued_job(db_session: AsyncSession) -> None:
+    ctx = await _ctx(db_session)
+    job = AIGenerationJob(
+        project_id=ctx.project.id,
+        requested_by=ctx.actor_id,
+        agent_role=AgentRole.project_owner,
+        target_artifact=ArtifactType.srs,
+        status=JobStatus.queued,  # created_at defaults to now() — within the grace
+    )
+    db_session.add(job)
+    await db_session.flush()
+    swept = await sweep_stuck_jobs(db_session, redis=None)
+    assert job.id not in swept
+    assert job.status is JobStatus.queued
+
+
 async def test_sweeper_leaves_fresh_job(db_session: AsyncSession) -> None:
     ctx = await _ctx(db_session)
     job = AIGenerationJob(

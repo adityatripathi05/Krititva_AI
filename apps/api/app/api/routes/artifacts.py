@@ -27,7 +27,8 @@ from app.api.deps import (
     require_project_membership,
 )
 from app.api.errors import NotFound
-from app.models import JobStatus, Project, ProjectMember, ProjectRole, User
+from app.db import session_scope
+from app.models import AIGenerationJob, JobStatus, Project, ProjectMember, ProjectRole, User
 from app.schemas.artifacts import (
     AcceptResult,
     GenerateArtifactRequest,
@@ -74,7 +75,17 @@ async def enqueue_artifact(
     job = await _service(db).enqueue(project, actor.id, membership, body, semaphore)
     await db.commit()
     if arq_pool is not None:
-        await arq_pool.enqueue_job(GEN_JOB, str(job.id))  # type: ignore[attr-defined]
+        try:
+            await arq_pool.enqueue_job(GEN_JOB, str(job.id))  # type: ignore[attr-defined]
+        except Exception:
+            # The job row is committed as queued but no task was enqueued. Fail
+            # it and reclaim the slot now rather than leaving it orphaned for the
+            # sweeper + the semaphore TTL (§NFR-5.2.5, FR-4.6.8).
+            job.status = JobStatus.failed
+            job.error = "failed to enqueue generation task"
+            await db.commit()
+            await semaphore.release(actor.id)
+            raise
     return GenerateArtifactResponse(job_id=job.id, status=job.status)
 
 
@@ -131,7 +142,11 @@ async def accept_job(
     job = await svc.get_job(project_id, job_id)
     outcome = await svc.accept(project, job, actor.id)
     await db.commit()
-    return AcceptResult(job_id=outcome.job_id, document_version_id=outcome.document_version_id)
+    return AcceptResult(
+        job_id=outcome.job_id,
+        document_version_id=outcome.document_version_id,
+        work_item_ids=outcome.work_item_ids,
+    )
 
 
 @router.post("/jobs/{job_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
@@ -178,6 +193,15 @@ async def _event_stream(
     pubsub = pool.pubsub()
     await pubsub.subscribe(channel(job_id))
     try:
+        # Close the subscribe race: a terminal frame published between the
+        # handler's status read and this subscribe would be lost (pub/sub has no
+        # replay). Re-read once; if the job already settled, emit a fresh state
+        # frame and stop rather than heartbeat forever.
+        async with session_scope() as db:
+            fresh = await db.get(AIGenerationJob, job_id)
+        if fresh is not None and fresh.status not in _LIVE_STATUSES:
+            yield _sse("state", JobStatusOut.model_validate(fresh).model_dump(mode="json"))
+            return
         while True:
             msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=15.0)
             if msg is None:

@@ -167,7 +167,14 @@ async def run_artifact_generation(ctx: dict[str, Any], job_id: str) -> str:
                 detail={"draft": str(version_id)},
             )
             await db.commit()
-        await publish(redis, jid, {"step": "done", "draft_id": str(version_id)})
+        # The committed draft is the source of truth; the terminal frame is
+        # best-effort. Swallow a pub/sub error here so it cannot fall through to
+        # the outer handler and demote an already-committed awaiting_review job
+        # to failed (which would also re-mutate finished_at, §1.3).
+        try:
+            await publish(redis, jid, {"step": "done", "draft_id": str(version_id)})
+        except Exception as pub_exc:  # best-effort notification; draft is committed
+            _log.warning("done_publish_failed", job_id=job_id, error=str(pub_exc))
         return "awaiting_review"
     except Exception as exc:
         _log.warning("generation_failed", job_id=job_id, error=str(exc))
