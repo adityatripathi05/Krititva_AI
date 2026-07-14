@@ -22,6 +22,7 @@ from app.db import get_session_factory
 from app.models import OrgRole, ProjectMember, ProjectRole, User
 from app.security.jwt import InvalidToken as JWTInvalidToken
 from app.security.jwt import decode_access_token
+from app.security.ratelimit import NullRateLimiter, RateLimiter, RedisRateLimiter
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
@@ -45,6 +46,17 @@ def get_user_ai_semaphore(request: Request) -> AISemaphore:
     if pool is None:
         return NullSemaphore()
     return RedisAISemaphore(pool, get_settings().user_ai_concurrency)
+
+
+def get_rate_limiter(request: Request) -> RateLimiter:
+    """Per-org request limiter. Disabled (no-op) when rate limiting is turned off
+    or Redis is unavailable (dev/test); production has the arq pool, so the real
+    per-org cap applies there (NFR-5.2.5)."""
+    settings = get_settings()
+    pool = getattr(request.app.state, "arq_pool", None)
+    if not settings.rate_limit_enabled or pool is None:
+        return NullRateLimiter()
+    return RedisRateLimiter(pool, settings.org_rps, settings.rate_limit_window_s)
 
 
 def _extract_bearer(request: Request) -> str | None:
@@ -72,6 +84,18 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     if user is None or not user.is_active:
         raise InvalidToken("user not active")
     return user
+
+
+async def enforce_org_rate_limit(
+    user: User = Depends(get_current_user),
+    limiter: RateLimiter = Depends(get_rate_limiter),
+) -> None:
+    """Router-level guard: count this request against the caller's org budget.
+
+    Keyed on ``organization_id`` (falling back to the user id if the org column
+    is null in single-org v1) so one org cannot exhaust shared capacity."""
+    key = str(user.organization_id) if user.organization_id is not None else f"user:{user.id}"
+    await limiter.check(key)
 
 
 def require_org_role(*allowed: OrgRole) -> Callable[..., Awaitable[User]]:
@@ -162,6 +186,8 @@ __all__ = [
     "get_db",
     "get_arq_pool",
     "get_user_ai_semaphore",
+    "get_rate_limiter",
+    "enforce_org_rate_limit",
     "get_current_user",
     "require_org_role",
     "require_project_membership",

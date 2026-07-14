@@ -10,10 +10,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.responses import ORJSONResponse
 
 from app import __version__
+from app.api.deps import enforce_org_rate_limit
 from app.api.errors import register_exception_handlers
 from app.api.routes import artifacts, auth, documents, health, projects, work_items
 from app.config import get_settings
@@ -54,13 +55,17 @@ def create_app() -> FastAPI:
     )
     register_exception_handlers(app)
     app.add_middleware(CSRFMiddleware)
+    # Per-org RPS applies to the authenticated resource routers. Health is an
+    # unauthenticated probe; auth mixes public endpoints (login/setup) with no org
+    # context, so it is excluded from the org-keyed limit.
+    rate_limited = [Depends(enforce_org_rate_limit)]
     # Health probes live at the root (unversioned) so probes don't break on version bumps.
     app.include_router(health.router)
     app.include_router(auth.router, prefix=settings.api_prefix)
-    app.include_router(projects.router, prefix=settings.api_prefix)
-    app.include_router(work_items.router, prefix=settings.api_prefix)
-    app.include_router(documents.router, prefix=settings.api_prefix)
-    app.include_router(artifacts.router, prefix=settings.api_prefix)
+    app.include_router(projects.router, prefix=settings.api_prefix, dependencies=rate_limited)
+    app.include_router(work_items.router, prefix=settings.api_prefix, dependencies=rate_limited)
+    app.include_router(documents.router, prefix=settings.api_prefix, dependencies=rate_limited)
+    app.include_router(artifacts.router, prefix=settings.api_prefix, dependencies=rate_limited)
     return app
 
 

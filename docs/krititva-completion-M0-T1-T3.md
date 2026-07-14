@@ -713,9 +713,13 @@ An end-to-end adversarial peer review (5 parallel reviewers over the AI subsyste
 
 Low items also fixed: SSE route now persists a refreshed `Set-Cookie` on the post-refresh error path; `JobDetail` keys on `jobId` so per-job stream state can't bleed across selections.
 
-### 21.2 Deferred (tracked, not defects in delivered code)
+### 21.2 Delivered after the review
 
-- **#9 — per-org rate limiting (`org_rps`, NFR-5.2.5) and at-rest secret encryption (`data_key`, §10)** are declared config with no implementation. Rate limiting needs its own middleware + Redis window; the DATA_KEY envelope-encryption module is a hard prerequisite for OIDC/provider-key persistence (nothing sensitive is DB-persisted yet). Both warrant dedicated tasks rather than a bolt-on.
+- **#9a — per-org rate limiting (NFR-5.2.5, §10).** Implemented: a Redis fixed-window counter (`app/security/ratelimit.py` — `RedisRateLimiter`/`NullRateLimiter`) enforced by an `enforce_org_rate_limit` dependency on the authenticated resource routers (projects, work_items, documents, artifacts). Keyed on `organization_id` (falls back to user id if null); over-budget → **429 `rate_limited`** with a `Retry-After` header (the error handler now emits `Retry-After` from any `DomainError.retry_after`, also covering `TooManyInFlight`). Configurable via `KRITITVA_RATE_LIMIT_ENABLED` / `KRITITVA_ORG_RPS` / `KRITITVA_RATE_LIMIT_WINDOW_S`; no-ops without Redis (dev/test), mirroring the AI semaphore. Health + auth (public/no-org) are excluded. +9 tests (7 unit + 2 wired). **265 backend tests.**
+
+### 21.3 Still deferred (tracked)
+
+- **#9b — at-rest secret encryption (`data_key`, §10).** The DATA_KEY envelope-encryption module is a hard prerequisite for OIDC/provider-key persistence; nothing sensitive is DB-persisted yet, so it lands with those features rather than as an unused module.
 - **Refresh-token reuse detection** (family revocation on replay of a revoked token) — defense-in-depth, not spec-required; left for an auth-hardening task.
 - **`pack_to_budget` greedy-non-prefix**, `job.retrieval_model` recorded-but-ignored, `TooManyInFlight` missing `Retry-After`, lineage summarizer seam unwired — Low; noted for later.
 - **Verified-clean areas** (no change needed): provenance-before-LLM ordering, structured-output + drop-unknown-fields, no-phone-home, methodology-as-data, migration mechanics, Argon2id params, 404-not-403 on reads, document immutability, TS↔Pydantic type fidelity, XSS-safety, the LCS diff.

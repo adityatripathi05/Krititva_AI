@@ -18,11 +18,19 @@ class DomainError(Exception):
 
     http_status: int = 500
     code: str = "internal_error"
+    retry_after: int | None = None  # seconds; emitted as a Retry-After header
 
-    def __init__(self, message: str = "", detail: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        message: str = "",
+        detail: dict[str, Any] | None = None,
+        retry_after: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.detail = detail or {}
+        if retry_after is not None:
+            self.retry_after = retry_after
 
 
 # ---- 4xx ----------------------------------------------------------------
@@ -146,6 +154,12 @@ class PrereqNotApproved(DomainError):
 class TooManyInFlight(DomainError):
     http_status = 429
     code = "job_concurrency_limit"
+    retry_after = 10
+
+
+class RateLimited(DomainError):
+    http_status = 429
+    code = "rate_limited"
 
 
 class InvalidJobState(DomainError):
@@ -166,5 +180,5 @@ def register_exception_handlers(app: FastAPI) -> None:
             payload["message"] = exc.message
         if exc.detail:
             payload["detail"] = exc.detail
-        headers = {"Retry-After": "10"} if isinstance(exc, TooManyInFlight) else None
+        headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after is not None else None
         return JSONResponse(status_code=exc.http_status, content=payload, headers=headers)

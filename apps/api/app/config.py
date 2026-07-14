@@ -85,7 +85,13 @@ class Settings(BaseSettings):
     telemetry_enabled: bool = False
 
     # --- Rate limits ---
+    # Per-organization request cap (NFR-5.2.5, §10): at most ``org_rps`` requests
+    # per ``rate_limit_window_s`` seconds. Enforced by a Redis fixed-window
+    # counter; disabled entirely when ``rate_limit_enabled`` is false or Redis is
+    # unavailable (dev/test).
+    rate_limit_enabled: bool = True
     org_rps: int = 100
+    rate_limit_window_s: int = 1
     user_ai_concurrency: int = 3
 
     @model_validator(mode="after")
