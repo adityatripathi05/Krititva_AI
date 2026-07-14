@@ -690,3 +690,32 @@ Architect (HLD/LLD, documents) and QA (test cases, work items) are the two shipp
 - **Citations deep-link within the panel, not out to a document section** — the `DocumentEditor`/documents viewer route (M1.T1.5) is deferred, so there's no doc anchor to target yet. When it lands, `CitationChip` should point at `/projects/{id}/documents/{did}#{section}`.
 - **Live end-to-end SSE frame streaming** (worker → Redis → route → `EventSource`) not exercised on Windows (no running worker/Redis in this session). Progress frames are terminal-only (`done`/`failed`) plus 15 s heartbeats, so the panel is status-driven; the poll fallback covers a dead stream regardless.
 - **`awaiting_review` treated as settled** (not polled/streamed) — it needs a human, not more polling. Only `queued`/`running` are "live".
+
+---
+
+## 21. Peer-review hardening pass (2026-07-14)
+
+An end-to-end adversarial peer review (5 parallel reviewers over the AI subsystem, work-item/methodology/migrations, auth/security, frontend, and traceability) ran after M1.T7. Findings were independently verified against code, then fixed in priority order. Backend test count **256 / 256** (was 245): +11 (chunk-scope 3, accept-work-items 2, sweeper 2, config/JWT 4). `mypy --strict` + ruff clean; frontend `typecheck`/`lint`/`build` green.
+
+### 21.1 Fixed
+
+| # | Sev | Finding | Fix |
+|---|---|---|---|
+| 1 | High | Cross-project chunk leak: `link()` wrote `to_chunk` unvalidated; `lineage_chunks`/`_lineage` had no project predicate | `link()` resolves the chunk's project → 404 on foreign/missing; migration **0012** scopes `lineage_chunks` to the focus item's project (defense-in-depth) |
+| 2 | High | QA (work-item) accept/reject were no-ops — accepted items stayed `ai_generated=TRUE`, rejected ones lingered | `accept()` clears `ai_generated` on the job's work items; `reject()` discards them (links cascade); `AcceptResult.work_item_ids` added |
+| 3 | High | JWT signed with the world-known default secret outside production | Hard boot failure in production; random **ephemeral** secret minted in dev/test so the default can never sign a live token |
+| 4 | High | SSE could hang "running" forever (subscribe race + poll gated off while connected) | Backend re-reads job after `subscribe` and emits a terminal frame if settled; frontend keeps a 15 s reconcile poll even while connected |
+| 5 | High | Citation deep-links dead — numeric `#prov-4.6.5` never matched the breadcrumb-derived row id | Shared slug + numeric-token matching against provenance breadcrumbs; unmatched citations render as inert chips |
+| 6 | Med | A transient Redis publish error demoted a committed `awaiting_review` job to `failed` | Success `publish()` moved to best-effort (swallowed) so it can't reach the outer handler |
+| 7 | Med | Orphaned `queued` jobs + leaked semaphore slots never reclaimed | Sweeper also fails orphaned queued jobs and releases the slot; enqueue route releases + fails on `enqueue_job` error |
+| 8 | Med | Concurrent create → 500; concurrent rerank → duplicate ranks | Per-project transaction advisory lock serializes seq/rank allocation in create + rerank |
+| 10 | Med/Low | LLD §4.7 missing the 4 shipped document GET endpoints; stale roadmap status line; `api-client` comment cited wrong milestone | Doc-only edits (LLD §4.7, roadmap header, `api-client/src/index.ts`) |
+
+Low items also fixed: SSE route now persists a refreshed `Set-Cookie` on the post-refresh error path; `JobDetail` keys on `jobId` so per-job stream state can't bleed across selections.
+
+### 21.2 Deferred (tracked, not defects in delivered code)
+
+- **#9 — per-org rate limiting (`org_rps`, NFR-5.2.5) and at-rest secret encryption (`data_key`, §10)** are declared config with no implementation. Rate limiting needs its own middleware + Redis window; the DATA_KEY envelope-encryption module is a hard prerequisite for OIDC/provider-key persistence (nothing sensitive is DB-persisted yet). Both warrant dedicated tasks rather than a bolt-on.
+- **Refresh-token reuse detection** (family revocation on replay of a revoked token) — defense-in-depth, not spec-required; left for an auth-hardening task.
+- **`pack_to_budget` greedy-non-prefix**, `job.retrieval_model` recorded-but-ignored, `TooManyInFlight` missing `Retry-After`, lineage summarizer seam unwired — Low; noted for later.
+- **Verified-clean areas** (no change needed): provenance-before-LLM ordering, structured-output + drop-unknown-fields, no-phone-home, methodology-as-data, migration mechanics, Argon2id params, 404-not-403 on reads, document immutability, TS↔Pydantic type fidelity, XSS-safety, the LCS diff.

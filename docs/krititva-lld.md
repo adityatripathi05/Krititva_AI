@@ -750,9 +750,13 @@ DELETE /projects/{id}/milestones/{mid}/approvals/{aid}         -> 204   (revoke)
 ### 4.7 Documents
 ```
 POST   /projects/{id}/documents                                -> Document
+GET    /projects/{id}/documents                                -> [Document]
+GET    /projects/{id}/documents/{did}                          -> Document
 POST   /projects/{id}/documents/{did}/versions                 -> DocumentVersion
+GET    /projects/{id}/documents/{did}/versions                 -> [DocumentVersion]
+GET    /projects/{id}/documents/{did}/versions/{vid}           -> DocumentVersion
 POST   /projects/{id}/documents/{did}/versions/{vid}/approve   -> DocumentVersion
-GET    /projects/{id}/documents/{did}/export.pdf               -> application/pdf
+GET    /projects/{id}/documents/{did}/export.pdf               -> application/pdf   (deferred, M1.T1.4)
 ```
 
 ### 4.8 AI artifacts

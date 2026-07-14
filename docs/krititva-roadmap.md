@@ -1,6 +1,6 @@
 # Krititva AI — Roadmap, Milestones, and Task Breakdown (v1.0)
 
-**Status:** In progress — M0.T1, M0.T2, M0.T3 ✅ delivered ([completion report](krititva-completion-M0-T1-T3.md))
+**Status:** In progress — **M0 complete; M1.T1–T7 delivered** (see per-task ✅ markers below); M1.T8 next. Running [completion report](krititva-completion-M0-T1-T3.md) (covers M0 → M1.T7).
 **Upstream:** [krititva-srs.md](krititva-srs.md), [krititva-hld.md](krititva-hld.md), [krititva-lld.md](krititva-lld.md)
 
 This roadmap decomposes v1 into five milestones (M0–M4), each with tasks and subtasks. Every task cites the SRS requirement(s) it delivers and the LLD section(s) it implements. Effort is a rough T-shirt size (S ≤ 2 dev-days, M ≤ 1 week, L ≤ 2 weeks, XL > 2 weeks). Two-lane parallelism is assumed (backend + frontend can proceed together where noted).
