@@ -167,6 +167,32 @@ async def test_non_member_gets_404(client: AsyncClient, db_session: AsyncSession
     assert r.status_code == 404
 
 
+async def test_list_jobs_returns_enqueued(client: AsyncClient, db_session: AsyncSession) -> None:
+    seed = await _seed(client, db_session)
+    r = await _enqueue(client, seed, seed.admin, agent_role="project_owner", target_artifact="srs")
+    job_id = r.json()["job_id"]
+    listing = await client.get(
+        f"/api/v1/projects/{seed.project_id}/artifacts/jobs",
+        headers=_bearer(seed.admin),
+    )
+    assert listing.status_code == 200, listing.text
+    ids = [j["id"] for j in listing.json()]
+    assert job_id in ids
+
+
+async def test_list_jobs_non_member_404(client: AsyncClient, db_session: AsyncSession) -> None:
+    seed = await _seed(client, db_session)
+    org = await db_session.get(Organization, seed.org_id)
+    assert org is not None
+    outsider = await make_user(db_session, org)
+    await db_session.commit()
+    r = await client.get(
+        f"/api/v1/projects/{seed.project_id}/artifacts/jobs",
+        headers=_bearer(outsider),
+    )
+    assert r.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # Accept / reject
 # ---------------------------------------------------------------------------

@@ -214,6 +214,50 @@ async def test_enqueue_success_records_job_and_audit(db_session: AsyncSession) -
 
 
 # ---------------------------------------------------------------------------
+# Job list (M1.T7 — powers the AI panel's job list)
+# ---------------------------------------------------------------------------
+
+
+async def test_list_jobs_scoped_and_ordered(db_session: AsyncSession) -> None:
+    ctx = await _ctx(db_session)
+    first = await ctx.orch.enqueue(
+        ctx.project,
+        ctx.actor_id,
+        ctx.membership,
+        _req(AgentRole.project_owner, ArtifactType.srs),
+        NullSemaphore(),
+    )
+    second = await ctx.orch.enqueue(
+        ctx.project,
+        ctx.actor_id,
+        ctx.membership,
+        _req(AgentRole.project_owner, ArtifactType.srs),
+        NullSemaphore(),
+    )
+    # A job in a different project must not leak into this project's list.
+    other = await _ctx(db_session)
+    await other.orch.enqueue(
+        other.project,
+        other.actor_id,
+        other.membership,
+        _req(AgentRole.project_owner, ArtifactType.srs),
+        NullSemaphore(),
+    )
+
+    # Same-transaction rows share the frozen tx now(); set distinct timestamps
+    # so the created_at-desc ordering is exercised deterministically.
+    now = datetime.now(UTC)
+    first.created_at = now - timedelta(seconds=1)
+    second.created_at = now
+    await db_session.flush()
+
+    jobs = await ctx.orch.list_jobs(ctx.project.id)
+    ids = [j.id for j in jobs]
+    assert ids == [second.id, first.id]  # newest first
+    assert all(j.project_id == ctx.project.id for j in jobs)
+
+
+# ---------------------------------------------------------------------------
 # Generation worker core
 # ---------------------------------------------------------------------------
 

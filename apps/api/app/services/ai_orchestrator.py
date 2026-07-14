@@ -74,6 +74,14 @@ class AIOrchestrator:
             raise NotFound("not_found")
         return job
 
+    async def list_jobs(self, project_id: uuid.UUID) -> list[AIGenerationJob]:
+        stmt = (
+            select(AIGenerationJob)
+            .where(AIGenerationJob.project_id == project_id)
+            .order_by(AIGenerationJob.created_at.desc(), AIGenerationJob.id.desc())
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
     async def list_provenance(self, job: AIGenerationJob) -> list[AIProvenance]:
         stmt = (
             select(AIProvenance)

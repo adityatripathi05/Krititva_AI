@@ -78,6 +78,17 @@ async def enqueue_artifact(
     return GenerateArtifactResponse(job_id=job.id, status=job.status)
 
 
+@router.get("/jobs", response_model=list[JobStatusOut])
+async def list_jobs(
+    project_id: uuid.UUID,
+    _member: tuple[User, ProjectMember] = Depends(require_project_membership()),
+    db: AsyncSession = Depends(get_db),
+) -> list[JobStatusOut]:
+    await _load_project(db, project_id)
+    jobs = await _service(db).list_jobs(project_id)
+    return [JobStatusOut.model_validate(j) for j in jobs]
+
+
 @router.get("/jobs/{job_id}", response_model=JobStatusOut)
 async def get_job(
     project_id: uuid.UUID,

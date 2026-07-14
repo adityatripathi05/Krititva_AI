@@ -758,6 +758,7 @@ GET    /projects/{id}/documents/{did}/export.pdf               -> application/pd
 ### 4.8 AI artifacts
 ```
 POST   /projects/{id}/artifacts                                -> {job_id} (202)
+GET    /projects/{id}/artifacts/jobs                           -> [JobStatus]   (newest first)
 GET    /projects/{id}/artifacts/jobs/{jid}                     -> JobStatus
 GET    /projects/{id}/artifacts/jobs/{jid}/events              -> text/event-stream
 POST   /projects/{id}/artifacts/jobs/{jid}/accept              -> AcceptResult
