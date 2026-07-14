@@ -200,10 +200,11 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 **Traces:** UI-5, FR-4.6.8, FR-4.10.2 · §LLD 7.2 (AIPanel), §LLD 4.8
 **Effort:** M (parallel with T3–T6)
 
-- **M1.T7.1** SSE client hook (auto-reconnect, poll fallback).
-- **M1.T7.2** Provenance list rendering `[SRS §x.y.z]` as deep-link chips.
-- **M1.T7.3** Accept/reject actions with confirmation on stale-flag interaction.
-- **M1.T7.4** Draft diff view (side-by-side vs current approved).
+- ✅ **M1.T7.1** SSE client hook (`useJobStream`: `EventSource` auto-reconnect + 4 s poll fallback, live-state-gated). Dedicated leaf BFF route streams the upstream `text/event-stream` unbuffered, shadowing the buffering catch-all proxy (verified by live route-precedence smoke test).
+- ✅ **M1.T7.2** Provenance list (stage/section/similarity/hash) + `[SRS §x.y.z]`/`[HLD §…]` citation chips that deep-link to the matching provenance row via `:target` (in-panel; doc-section deep link pending the deferred documents viewer).
+- ✅ **M1.T7.3** Accept/reject with confirmation dialogs; reviewer-gated (`project_owner`/`scrum_master`), reject requires a reason. (Stale-flag confirmation lands with M1.T8.)
+- ✅ **M1.T7.4** Draft diff view — side-by-side draft vs current approved (self-contained LCS line diff, no new dep) + Draft reader toggle.
+- ➕ Supporting: `GET /projects/{id}/artifacts/jobs` list endpoint (LLD §4.8 updated) so the panel's job list survives refresh.
 
 ### M1.T8 — Fake LLM + smoke suite
 **Deliverables:** `FakeLLMClient` for deterministic CI; opt-in Ollama-backed smoke run on tagged releases.

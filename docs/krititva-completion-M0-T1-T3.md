@@ -657,3 +657,36 @@ New infra (`app/ai/profiles/`):
 ### 19.3 M1 agent status
 
 Architect (HLD/LLD, documents) and QA (test cases, work items) are the two shipped role profiles; both plug into the profile-driven worker via the `krititva.agents` entry-point group. Remaining M1: **T7 — AI Panel UI** (frontend: job list, live SSE progress, provenance viewer, accept/reject) — parallelizable, no backend blockers.
+
+---
+
+## 20. M1.T7 — AI Panel UI + provenance viewer (2026-07-14)
+
+**Status:** Delivered (T7.1–T7.4). Frontend, verified by `pnpm --filter web typecheck && lint && build` (all green; no live-stack E2E on Windows) plus a live route-precedence smoke test (below). One small backend addition (job-list endpoint). Backend test count **245 / 245** (was 242): +3 (`test_ai_orchestrator.py::test_list_jobs_scoped_and_ordered`, `test_artifacts.py::test_list_jobs_returns_enqueued`, `test_artifacts.py::test_list_jobs_non_member_404`). Traces: UI-5, FR-4.6.8, FR-4.10.2 · LLD §7.2 (AIPanel), §4.8.
+
+### 20.1 Supporting backend change (job list)
+
+- **New endpoint `GET /projects/{id}/artifacts/jobs → [JobStatusOut]`** (newest first), backing the panel's job list so it survives a refresh and the provenance viewer is reachable for any past job. §4.8 had only get-by-id. `AIOrchestrator.list_jobs` is project-scoped; the route resolves membership (404 for non-members). **LLD §4.8 updated** in the same commit.
+
+### 20.2 Subtask delivery
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M1.T7.1 SSE hook (reconnect + poll fallback) | ✅ | `lib/hooks/artifacts.ts::useJobStream` — `EventSource` (native auto-reconnect) that pushes `state`/`progress` frames into the TanStack job-status cache and refetches provenance on the terminal frame; a **4 s poll fallback** on the job query runs only while the stream is disconnected. Neither runs once the job leaves the live (`queued`/`running`) states. **The catch-all BFF proxy buffers (`await res.text()`), which defeats SSE** — so a dedicated leaf route `app/api/v1/projects/[projectId]/artifacts/jobs/[jobId]/events/route.ts` shadows it and pipes the upstream `text/event-stream` `ReadableStream` straight through (`force-dynamic`, `no-cache, no-transform`, `X-Accel-Buffering: no`), with the same cookie→Bearer + refresh dance. |
+| M1.T7.2 Provenance list + citation chips | ✅ | `provenance-list.tsx` renders each `ai_provenance` row (stage badge, `§section_path`, similarity %, chunk hash), anchored by `section_path`. `citations.tsx` linkifies `[SRS §x.y.z]`/`[HLD §…]` tokens in the draft body to the matching provenance row via `:target` — a **self-contained deep link** (the documents viewer route is still deferred, so citations cross-reference within the panel rather than out to a doc section). |
+| M1.T7.3 Accept/reject + confirmation | ✅ | `review-actions.tsx` — confirm dialog on accept ("promotes to canonical … cannot be undone"); reject dialog requires a reason (backend `min_length=1`). Reviewer-gated to `project_owner`/`scrum_master` via `/auth/me` membership role (`lib/hooks/me.ts`); backend still enforces 403. Only shown when `status==='awaiting_review'`. |
+| M1.T7.4 Draft diff view | ✅ | `draft-review.tsx` — side-by-side **draft vs current approved** using a self-contained LCS line diff (`lib/diff.ts`, no new dependency), plus a "Draft" reader toggle that renders the citation chips. `useDraftDiff` resolves the draft version (by `result_document_version`) and the approved head from the documents API; disabled for work-item artifacts (no document version). |
+
+### 20.3 Decisions / scope notes
+
+- **Types extend the hand-maintained `lib/api/types.ts`** (not the OpenAPI codegen). The generated `packages/api-client` is still owed from M1.T3; generating it is a separate, build-tooling task. Confirmed with the user before proceeding.
+- **Job-list endpoint over client-side tracking.** Chose the small backend addition (+ LLD update) so the panel survives refresh and the provenance/audit trail (FR-4.10.2) is reachable for historical jobs. Confirmed with the user.
+- **SSE-through-proxy risk retired.** The dedicated leaf route was smoke-tested live against the running dev server: `POST …/jobs/{id}/events` → **405** (the GET-only streaming route owns the path, shadowing the catch-all), while `POST/GET /api/v1/projects/{id}/…` other paths → **401** from the backend through the catch-all (intermediate `projects/[projectId]/…` folders do **not** shadow it). Actual byte-streaming under a running worker is the one thing still unverified on Windows (worker/Redis not up); the route uses the standard Next `new Response(upstream.body, …)` streaming pattern.
+- **New shadcn primitive:** `components/ui/textarea.tsx` (reject reason, instructions). No new npm dependencies (`@radix-ui/react-dialog`, `lucide-react`, TanStack Query already present) — no AGPL/license gate triggered.
+- **No phone-home (§1.6):** the panel loads no external assets; all icons are `lucide-react` (bundled). SSE goes same-origin through the BFF.
+
+### 20.4 Deferrals
+
+- **Citations deep-link within the panel, not out to a document section** — the `DocumentEditor`/documents viewer route (M1.T1.5) is deferred, so there's no doc anchor to target yet. When it lands, `CitationChip` should point at `/projects/{id}/documents/{did}#{section}`.
+- **Live end-to-end SSE frame streaming** (worker → Redis → route → `EventSource`) not exercised on Windows (no running worker/Redis in this session). Progress frames are terminal-only (`done`/`failed`) plus 15 s heartbeats, so the panel is status-driven; the poll fallback covers a dead stream regardless.
+- **`awaiting_review` treated as settled** (not polled/streamed) — it needs a human, not more polling. Only `queued`/`running` are "live".
