@@ -118,6 +118,127 @@ export interface ApiError {
   readonly detail?: Record<string, unknown>;
 }
 
+// --- AI artifacts (mirrors app/schemas/artifacts.py + app/schemas/document.py) ---
+
+export type AgentRole =
+  | "project_owner"
+  | "architect"
+  | "scrum_master"
+  | "developer"
+  | "qa";
+export type ArtifactType =
+  | "srs"
+  | "epic_breakdown"
+  | "hld"
+  | "lld"
+  | "sprint_plan"
+  | "story_breakdown"
+  | "task_breakdown"
+  | "api_contract"
+  | "test_plan"
+  | "test_cases";
+export type JobStatus =
+  | "queued"
+  | "running"
+  | "awaiting_review"
+  | "accepted"
+  | "rejected"
+  | "failed";
+export type DocType = "srs" | "hld" | "lld" | "test_plan" | "other";
+export type DocStatus = "draft" | "in_review" | "approved" | "superseded";
+
+export const TERMINAL_JOB_STATUSES: readonly JobStatus[] = [
+  "accepted",
+  "rejected",
+  "failed",
+];
+
+export function isTerminalStatus(status: JobStatus): boolean {
+  return TERMINAL_JOB_STATUSES.includes(status);
+}
+
+/** A job the worker is actively progressing — worth streaming/polling. Settled
+ * states (`awaiting_review` + the terminal set) need neither. */
+export function isLiveStatus(status: JobStatus): boolean {
+  return status === "queued" || status === "running";
+}
+
+export interface Job {
+  readonly id: string;
+  readonly project_id: string;
+  readonly agent_role: AgentRole;
+  readonly target_artifact: ArtifactType;
+  readonly status: JobStatus;
+  readonly focus_item_id: string | null;
+  readonly result_document_version: string | null;
+  readonly model_used: string | null;
+  readonly prompt_tokens: number | null;
+  readonly output_tokens: number | null;
+  readonly error: string | null;
+  readonly created_at: string;
+  readonly started_at: string | null;
+  readonly finished_at: string | null;
+}
+
+export interface GenerateArtifactRequest {
+  readonly agent_role: AgentRole;
+  readonly target_artifact: ArtifactType;
+  readonly focus_item_id?: string | null;
+  readonly instructions?: string | null;
+}
+
+export interface EnqueuedJob {
+  readonly job_id: string;
+  readonly status: JobStatus;
+}
+
+export interface AcceptResult {
+  readonly job_id: string;
+  readonly document_version_id: string | null;
+}
+
+export type ProvenanceStage = "lineage" | "semantic" | "operational";
+
+export interface ProvenanceEntry {
+  readonly id: string;
+  readonly stage: ProvenanceStage;
+  readonly source_chunk: string | null;
+  readonly chunk_hash: string | null;
+  readonly section_path: string | null;
+  readonly source_item: string | null;
+  readonly similarity: number | null;
+}
+
+export interface DocumentSummary {
+  readonly id: string;
+  readonly project_id: string;
+  readonly doc_type: DocType;
+  readonly title: string;
+  readonly current_version_id: string | null;
+  readonly created_at: string;
+}
+
+export interface DocumentVersion {
+  readonly id: string;
+  readonly document_id: string;
+  readonly version_no: number;
+  readonly content_md: string;
+  readonly content_hash: string;
+  readonly status: DocStatus;
+  readonly change_summary: string | null;
+  readonly created_by: string;
+  readonly ai_job_id: string | null;
+  readonly created_at: string;
+  readonly approved_at: string | null;
+}
+
+/** A single SSE progress frame published by the generation worker. */
+export interface ProgressFrame {
+  readonly step: string;
+  readonly draft_id?: string;
+  readonly error?: string;
+}
+
 export function categoryBadgeVariant(
   category: WorkflowCategory,
 ): "secondary" | "outline" | "default" {

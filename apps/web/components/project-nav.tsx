@@ -12,6 +12,7 @@ export function ProjectNav({ projectId }: { readonly projectId: string }) {
     { href: base, label: "Overview" },
     { href: `${base}/board`, label: "Board" },
     { href: `${base}/backlog`, label: "Backlog" },
+    { href: `${base}/ai`, label: "AI" },
     { href: `${base}/settings`, label: "Settings" },
   ];
 
