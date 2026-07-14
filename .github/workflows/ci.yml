@@ -24,7 +24,7 @@ jobs:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -63,7 +63,7 @@ jobs:
     name: frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -98,7 +98,7 @@ jobs:
     name: traceability
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -150,7 +150,7 @@ jobs:
     name: openapi diff (placeholder)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Placeholder
         run: |
           echo "OpenAPI diff check activates in M1.T3 when the artifact endpoints ship."
