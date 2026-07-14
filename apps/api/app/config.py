@@ -6,6 +6,8 @@ Never read `os.environ` directly outside this module.
 
 from __future__ import annotations
 
+import logging
+import secrets
 from functools import lru_cache
 from typing import Literal
 
@@ -13,6 +15,8 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 INSECURE_JWT_DEFAULT = "insecure-dev-only-change-me"
+
+_log = logging.getLogger("krititva.config")
 
 
 class Settings(BaseSettings):
@@ -85,11 +89,22 @@ class Settings(BaseSettings):
     user_ai_concurrency: int = 3
 
     @model_validator(mode="after")
-    def _production_hardening(self) -> Settings:
-        if self.environment == "production" and self.jwt_secret in ("", INSECURE_JWT_DEFAULT):
+    def _harden_jwt_secret(self) -> Settings:
+        """Never run with the world-known default signing secret. In production
+        that is a hard boot failure; in dev/test we mint a random ephemeral
+        secret so a forgotten ``KRITITVA_JWT_SECRET`` can never yield forgeable
+        tokens (the docker/compose path always sets a real secret)."""
+        if self.jwt_secret not in ("", INSECURE_JWT_DEFAULT):
+            return self
+        if self.environment == "production":
             raise ValueError(
                 "KRITITVA_JWT_SECRET must be set to a non-default, non-empty value in production"
             )
+        self.jwt_secret = secrets.token_urlsafe(48)
+        _log.warning(
+            "KRITITVA_JWT_SECRET is unset/default; generated an ephemeral secret. "
+            "Sessions will not survive a restart — set a stable secret for real use."
+        )
         return self
 
 
