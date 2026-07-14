@@ -180,11 +180,11 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 **Traces:** FR-4.6.1, FR-4.6.5–4.6.7 · §LLD 5.1, §LLD 5.4, §LLD 5.5
 **Effort:** L
 
-- **M1.T5.1** `app/ai/profiles/architect.py` implementing `RoleProfile`.
-- **M1.T5.2** Jinja templates for `render_system` and `render_user`.
-- **M1.T5.3** `persist_draft` writes a `document_versions` row (`doc_type='hld'|'lld'`, `status='draft'`).
-- **M1.T5.4** Section-by-section generation loop with per-section citation validation.
-- **M1.T5.5** `DesignDocument` Pydantic schema + tests.
+- ✅ **M1.T5.1** `app/ai/profiles/architect.py` implementing `RoleProfile` (hld+lld, frontier tier). New profile infra: `app/ai/profiles/base.py` (`RoleProfile` Protocol, `PersistResult`, `ProfileRegistry` loaded via the `krititva.agents` entry-point group per §7.4, `GenericDocumentProfile` fallback, `resolve_generation_model`). Worker is now **profile-driven** (resolve → retrieval_policy → render → output_schema → persist_draft), replacing the T3/T4 hard-coded path.
+- ✅ **M1.T5.2** Jinja templates `app/ai/prompts/architect_{system,user}.j2` (`app/ai/templating.py` env) — wrap context as delimited data, instruct the model to ignore embedded instructions (§7.5), mandate `[SRS §…]` citations.
+- ✅ **M1.T5.3** `persist_draft` writes a draft `document_versions` row (`doc_type='hld'|'lld'` from `target_artifact`, `status='draft'`, `ai_job_id`); never approves (§7.5).
+- ✅ **M1.T5.4** Per-section citation validation — schema requires non-empty `srs_citations` per section (tightens §5.5's representative default to honor §7.4) + a whitespace guard (`MissingCitations`). Single structured multi-section call; iterative per-section LLM loop is a scale optimization deferred.
+- ✅ **M1.T5.5** `DesignDocument` / `DesignSection` / `MermaidDiagram` schemas (`app/schemas/artifacts.py`, `extra='ignore'` drops unknown fields §1.10; Mermaid preserved as fenced ` ```mermaid ` blocks) + 10 tests (registry, retrieval policy, render, schema roundtrip + citation enforcement, persist_draft, fake-LLM e2e).
 
 ### M1.T6 — QA agent (Test Cases)
 **Deliverables:** QA profile, `TestCaseSet` schema, generates test cases as **work_items** (`kind='test_case'`) linked via `tests` to stories.

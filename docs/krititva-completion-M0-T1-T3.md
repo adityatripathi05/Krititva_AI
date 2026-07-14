@@ -598,3 +598,36 @@ GET    /api/v1/projects/{id}/artifacts/jobs/{jid}/provenance  -> [ProvenanceEntr
 - **Default plan** (`default_plan_for`) stands in for `profile.retrieval_policy` until role profiles land (M1.T5/T6): semantic over the artifact's approved prerequisites (or the core doc types); lineage only when a focus item is given; operational off by default.
 - **Operational scope:** only `open_items` is implemented (work items not in a `done`-category state). `sprint` / `capacity` need those services (M2/M3) and return nothing for now.
 - **Summarizer in the worker** — deferred: passing an LLM-backed summarizer into assembly would add a model call before the provenance commit; left as a seam (`assemble` accepts an optional `summarizer`).
+
+---
+
+## 18. M1.T5 — Architect agent (HLD, LLD) (2026-07-14)
+
+**Status:** Delivered (T5.1–T5.5). Test count **234 / 234** (was 224): +10 architect/profile (`tests/integration/test_architect_profile.py`); the T3/T4 worker tests continue to pass unchanged under the new profile-driven path. `mypy --strict` clean on 77 source files; ruff clean. Traces: FR-4.6.1, FR-4.6.5–4.6.7 · LLD §5.1, §5.4, §5.5.
+
+### 18.1 What changed — the worker is now profile-driven
+
+The generation worker no longer hard-codes `GenerationOutput` + document persist. It resolves a `RoleProfile` for `(agent_role, target_artifact)` and delegates: `retrieval_policy` (plan), `render_system`/`render_user` (prompts), `output_schema` (structured output), `persist_draft` (draft write). This is the seam M1.T6 (QA → work items) plugs into.
+
+New infra (`app/ai/profiles/`):
+- **`base.py`** — `RoleProfile` Protocol, `PersistResult`, `ProfileRegistry` (loads profiles from the **`krititva.agents` entry-point group** — §7.4, so plugins add agents without touching core), `GenericDocumentProfile` (built-in fallback for plain document artifacts — preserves the T3/T4 behavior so `project_owner→srs` etc. still work), `resolve_generation_model(project, tier)`.
+- **`architect.py`** — `ArchitectProfile` (hld+lld, frontier tier, `DesignDocument` schema). Registered via `[project.entry-points."krititva.agents"]` in `pyproject.toml`.
+- **`app/ai/templating.py`** + `app/ai/prompts/architect_{system,user}.j2` — Jinja prompts (autoescape off; prompt text, not HTML).
+- `UnsupportedArtifact` moved to `base.py` (re-exported from `workers.generation` for callers/tests); non-document artifacts with no profile still raise it (work-item artifacts pending M1.T6).
+
+### 18.2 Subtask delivery
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M1.T5.1 Architect profile | ✅ | Implements `RoleProfile`; registered via entry point. |
+| M1.T5.2 Jinja prompts | ✅ | `render_system`/`render_user` templates; context wrapped as delimited data (§7.5). |
+| M1.T5.3 `persist_draft` | ✅ | Draft `document_versions` row (`doc_type` from artifact, `status='draft'`, `ai_job_id`); never approves. |
+| M1.T5.4 Per-section citations | ✅ | Schema requires non-empty `srs_citations` per section + whitespace guard (`MissingCitations`). Iterative section loop deferred (scale optimization). |
+| M1.T5.5 `DesignDocument` schema + tests | ✅ | `DesignDocument`/`DesignSection`/`MermaidDiagram` (`extra='ignore'`, §1.10); Mermaid preserved as fenced blocks; 12 tests. |
+
+### 18.3 Decisions / notes
+
+- **Mandatory citations (§7.4 vs LLD §5.5):** §5.5 shows `srs_citations: list[str] = Field(default_factory=list)`, but CLAUDE.md §7.4 mandates citations. Followed the non-negotiable — `DesignSection.srs_citations` is `Field(min_length=1)`; absence is a schema-validation failure.
+- **Entry-point registration for core profiles:** honors §7.4 ("core code does not import profiles by module path"). Requires `uv sync` to refresh the editable install's metadata after adding the entry point; verified discovery works.
+- **Section-by-section (T5.4):** delivered as a single structured multi-section call with per-section citation validation. A true iterative one-call-per-section loop (for very large LLDs / context limits) is a future scale optimization, noted not shipped.
+- **`generate_draft` now returns `UUID | None`** — `None` for work-item-producing profiles (M1.T6).
