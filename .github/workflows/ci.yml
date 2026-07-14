@@ -109,17 +109,27 @@ jobs:
 
       - name: Extract implemented anchors
         run: |
-          grep -orhE '(FR|NFR|OR)-[0-9]+(\.[0-9]+){1,2}' \
+          grep -orhIE --exclude-dir=__pycache__ '(FR|NFR|OR)-[0-9]+(\.[0-9]+){1,2}' \
             apps/api/app apps/api/tests apps/web docs/krititva-roadmap.md 2>/dev/null \
             | sort -u > /tmp/kt-implemented
           echo "Implemented size: $(wc -l < /tmp/kt-implemented)"
 
       - name: Orphan check (cited anchors not defined in SRS)
         run: |
-          orphans=$(comm -23 /tmp/kt-implemented /tmp/kt-universe)
+          # A cited anchor is traced if the SRS defines it exactly OR defines a
+          # leaf under it: a section-level ref like NFR-5.4 is satisfied by the
+          # SRS's NFR-5.4.3. Only anchors with neither are true orphans.
+          orphans=""
+          while IFS= read -r a; do
+            [ -z "$a" ] && continue
+            if grep -qxF "$a" /tmp/kt-universe; then continue; fi
+            esc=$(printf '%s' "$a" | sed 's/\./\\./g')
+            if grep -qE "^${esc}\." /tmp/kt-universe; then continue; fi
+            orphans="${orphans}${a}\n"
+          done < /tmp/kt-implemented
           if [ -n "$orphans" ]; then
             echo "::error::Orphan anchors referenced but not defined in SRS:"
-            echo "$orphans"
+            printf '%b' "$orphans"
             exit 1
           fi
           echo "No orphans."

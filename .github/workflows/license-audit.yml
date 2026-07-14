@@ -35,14 +35,23 @@ jobs:
         run: uv sync --project apps/api --extra dev --frozen
 
       - name: pip-licenses
+        # --partial-match tolerates the inconsistent free-form license strings in
+        # PyPI metadata ("MIT License", "Apache-2.0 AND MIT", "Mozilla Public
+        # License 2.0 (MPL 2.0)"): an allowed token matches when it is a substring
+        # of the package's license. The allow-list stays permissive/weak-copyleft
+        # only (MIT/BSD/Apache/ISC/MPL/LGPL/PSF/Unlicense + AGPL) — no bare GPL or
+        # proprietary passes, so §1.7 (AGPL-compatibility) still holds. tiktoken is
+        # ignored: it dumps the full MIT license *body* (no parseable token) into
+        # its metadata; it is MIT (OpenAI).
         run: |
           uv run --project apps/api pip install pip-licenses
           uv run --project apps/api pip-licenses \
+            --partial-match \
             --format=markdown \
             --with-authors \
             --with-urls \
-            --allow-only='MIT;BSD;BSD-2-Clause;BSD-3-Clause;Apache-2.0;Apache Software License;MPL-2.0;ISC;Python Software Foundation License;PSF-2.0;LGPL-3.0-or-later;LGPLv3+;AGPL-3.0-only;AGPLv3;Public Domain;Unlicense;CC0-1.0' \
-            --ignore-packages krititva-api
+            --allow-only='MIT;BSD;Apache;ISC;MPL-2.0;MPL 2.0;Mozilla Public License;Python Software Foundation;PSF-2.0;Unlicense;LGPL;Lesser General Public License;AGPL;Public Domain;CC0' \
+            --ignore-packages krititva-api tiktoken
 
   javascript:
     name: javascript (license-checker)
