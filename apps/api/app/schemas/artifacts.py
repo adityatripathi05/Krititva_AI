@@ -9,6 +9,39 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import AgentRole, ArtifactType, JobStatus
 
+# ---------------------------------------------------------------------------
+# Architect output schema (LLD §5.5). ``srs_citations`` is required non-empty:
+# every design section that consumes SRS/HLD context must cite it (§CLAUDE.md
+# §7.4) — absence is a schema-validation failure. This tightens the §5.5
+# "representative" default (which showed default_factory=list).
+# ---------------------------------------------------------------------------
+
+
+class MermaidDiagram(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    caption: str = Field(max_length=200)
+    code: str = Field(max_length=8000)
+
+
+class DesignSection(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    heading: str
+    section_path: str
+    body_md: str
+    srs_citations: list[str] = Field(min_length=1)
+    open_questions: list[str] = Field(default_factory=list)
+
+
+class DesignDocument(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    title: str
+    scope_summary: str
+    sections: list[DesignSection] = Field(min_length=1)
+    mermaid_diagrams: list[MermaidDiagram] = Field(default_factory=list)
+
 
 class GenerateArtifactRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
