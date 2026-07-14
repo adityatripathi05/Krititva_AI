@@ -49,7 +49,7 @@ export function AIPanel({ projectId }: { readonly projectId: string }) {
               generate a new draft.
             </p>
           ) : (
-            <JobDetail projectId={projectId} jobId={selectedId} />
+            <JobDetail key={selectedId} projectId={projectId} jobId={selectedId} />
           )}
         </CardContent>
       </Card>

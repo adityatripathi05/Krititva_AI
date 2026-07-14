@@ -119,7 +119,10 @@ export function useJobStream(
     refetchInterval: (q) => {
       const status = q.state.data?.status;
       if (status === undefined || !isLiveStatus(status)) return false;
-      return connectedRef.current ? false : 4000;
+      // Poll fast as an SSE fallback while disconnected; keep a slow reconcile
+      // poll even when connected so a missed terminal frame (subscribe race)
+      // can't strand the UI in "running" forever.
+      return connectedRef.current ? 15000 : 4000;
     },
   });
 

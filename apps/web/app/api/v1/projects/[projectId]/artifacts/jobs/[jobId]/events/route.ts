@@ -83,8 +83,9 @@ export async function GET(
 
   if (!upstream.ok || upstream.body === null) {
     // Surface the auth/permission failure so EventSource's onerror fires and the
-    // client falls back to polling rather than hanging on a dead stream.
-    return new Response(null, { status: upstream.status });
+    // client falls back to polling rather than hanging on a dead stream. Still
+    // persist any refreshed tokens, or a rotated refresh token would be lost.
+    return new Response(null, { status: upstream.status, headers: setCookies });
   }
 
   const headers = streamHeaders(setCookies);

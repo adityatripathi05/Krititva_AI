@@ -4,19 +4,25 @@ import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useDraftDiff } from "@/lib/hooks/artifacts";
+import { useDraftDiff, useProvenance } from "@/lib/hooks/artifacts";
 import { diffStats, lineDiff, type DiffRow } from "@/lib/diff";
 import { cn } from "@/lib/utils";
 import type { Job } from "@/lib/api/types";
 
-import { CitationText } from "./citations";
+import { buildCitationAnchors, CitationText } from "./citations";
 
 type View = "draft" | "diff";
 
-function DraftReader({ content }: { readonly content: string }) {
+function DraftReader({
+  content,
+  anchors,
+}: {
+  readonly content: string;
+  readonly anchors: Map<string, string>;
+}) {
   return (
     <div className="max-h-[28rem] overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-4 text-sm leading-relaxed">
-      <CitationText text={content} />
+      <CitationText text={content} anchors={anchors} />
     </div>
   );
 }
@@ -90,6 +96,11 @@ export function DraftReview({
 }) {
   const [view, setView] = React.useState<View>("draft");
   const { data, isLoading, isError } = useDraftDiff(projectId, job);
+  const prov = useProvenance(projectId, job.id);
+  const anchors = React.useMemo(
+    () => buildCitationAnchors((prov.data ?? []).map((e) => e.section_path)),
+    [prov.data],
+  );
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading draft…</p>;
@@ -132,7 +143,7 @@ export function DraftReview({
       </div>
 
       {view === "draft" ? (
-        <DraftReader content={data.draft.content_md} />
+        <DraftReader content={data.draft.content_md} anchors={anchors} />
       ) : (
         <SideBySideDiff
           before={data.approved?.content_md ?? ""}

@@ -195,6 +195,7 @@ export interface EnqueuedJob {
 export interface AcceptResult {
   readonly job_id: string;
   readonly document_version_id: string | null;
+  readonly work_item_ids: readonly string[];
 }
 
 export type ProvenanceStage = "lineage" | "semantic" | "operational";
