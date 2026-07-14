@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -41,6 +42,33 @@ class DesignDocument(BaseModel):
     scope_summary: str
     sections: list[DesignSection] = Field(min_length=1)
     mermaid_diagrams: list[MermaidDiagram] = Field(default_factory=list)
+
+
+# QA output schema (LLD §5.5). ``srs_citations`` required non-empty per §7.4/T6.3.
+# ``story_id`` on the set is informational only — the tests are linked to the
+# job's focus item, never to an LLM-emitted id (§1.10).
+
+
+class TestCase(BaseModel):
+    __test__ = False  # not a pytest test class despite the name
+
+    model_config = ConfigDict(extra="ignore")
+
+    title: str = Field(min_length=1, max_length=140)
+    preconditions_md: str = ""
+    steps: list[str] = Field(min_length=1)
+    expected_md: str
+    kind: Literal["functional", "edge", "negative", "regression"] = "functional"
+    srs_citations: list[str] = Field(min_length=1)
+
+
+class TestCaseSet(BaseModel):
+    __test__ = False  # not a pytest test class despite the name
+
+    model_config = ConfigDict(extra="ignore")
+
+    cases: list[TestCase] = Field(min_length=1)
+    story_id: uuid.UUID | None = None
 
 
 class GenerateArtifactRequest(BaseModel):

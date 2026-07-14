@@ -79,7 +79,13 @@ class WorkItemService:
     # -----------------------------------------------------------------
 
     async def create(
-        self, project: Project, actor_id: uuid.UUID, payload: WorkItemCreate
+        self,
+        project: Project,
+        actor_id: uuid.UUID,
+        payload: WorkItemCreate,
+        *,
+        ai_generated: bool = False,
+        source_job_id: uuid.UUID | None = None,
     ) -> WorkItem:
         if payload.parent_id is not None:
             await self._check_hierarchy(project.id, payload.parent_id, payload.kind)
@@ -110,6 +116,8 @@ class WorkItemService:
             estimated_hours=payload.estimated_hours,
             rank=rank,
             created_by=actor_id,
+            ai_generated=ai_generated,
+            source_job_id=source_job_id,
         )
         self.db.add(item)
         await self.db.flush()
@@ -120,7 +128,7 @@ class WorkItemService:
             actor_id=actor_id,
             organization_id=project.organization_id,
             project_id=project.id,
-            detail={"kind": payload.kind.value, "seq": seq},
+            detail={"kind": payload.kind.value, "seq": seq, "ai_generated": ai_generated},
         )
         await self.db.flush()
         return item

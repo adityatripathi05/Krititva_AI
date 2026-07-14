@@ -56,6 +56,7 @@ krititva-worker = "app.workers.arq_settings:main"
 # so the worker never imports a profile by module path.
 [project.entry-points."krititva.agents"]
 architect = "app.ai.profiles.architect:ArchitectProfile"
+qa = "app.ai.profiles.qa:QAProfile"
 
 [build-system]
 requires = ["hatchling"]
