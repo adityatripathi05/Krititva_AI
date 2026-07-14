@@ -191,9 +191,9 @@ Total v1 estimate: 22 weeks (5.5 months) with two engineers full-time. Parallel-
 **Traces:** FR-4.6.1, FR-4.6.5, FR-4.6.7 · §LLD 5.1, §LLD 5.4, §LLD 5.5
 **Effort:** M
 
-- **M1.T6.1** `qa.py` profile.
-- **M1.T6.2** `persist_draft` writes work_items with `ai_generated=TRUE`, `state='draft'` (fresh Agile state); links via `work_item_links(link_type='tests')`.
-- **M1.T6.3** `TestCase.srs_citations` validated non-empty.
+- ✅ **M1.T6.1** `app/ai/profiles/qa.py` — `QAProfile` (test_cases, mid tier, `TestCaseSet` schema), registered via the `krititva.agents` entry point. **First work-item-producing profile** — `persist_draft` returns `PersistResult(work_item_ids=[...])`. Jinja prompts `qa_{system,user}.j2`.
+- ✅ **M1.T6.2** `persist_draft` creates `test_case` work items via `WorkItemService.create(..., ai_generated=True, source_job_id=job.id)` (extended to set both — §7.5/§7.6), in the project's initial Agile state; links each to the **focus story** via `work_item_links(link_type='tests')`. The link target is `job.focus_item_id`, never an LLM-emitted id (§1.10). Never approves (§1.1).
+- ✅ **M1.T6.3** `TestCase.srs_citations` required non-empty (schema `min_length=1`) + whitespace guard (`MissingCitations`). `MissingFocusStory` when no story focus. 8 tests.
 
 ### M1.T7 — AI Panel UI + provenance viewer
 **Deliverables:** Frontend surface for job list, live progress, provenance list with clickable citations, accept/reject.

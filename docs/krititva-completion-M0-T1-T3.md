@@ -631,3 +631,29 @@ New infra (`app/ai/profiles/`):
 - **Entry-point registration for core profiles:** honors §7.4 ("core code does not import profiles by module path"). Requires `uv sync` to refresh the editable install's metadata after adding the entry point; verified discovery works.
 - **Section-by-section (T5.4):** delivered as a single structured multi-section call with per-section citation validation. A true iterative one-call-per-section loop (for very large LLDs / context limits) is a future scale optimization, noted not shipped.
 - **`generate_draft` now returns `UUID | None`** — `None` for work-item-producing profiles (M1.T6).
+
+---
+
+## 19. M1.T6 — QA agent (Test Cases) (2026-07-14)
+
+**Status:** Delivered (T6.1–T6.3). Test count **242 / 242** (was 234): +8 QA (`tests/integration/test_qa_profile.py`). `mypy --strict` clean on 78 source files; ruff clean. Traces: FR-4.6.1, FR-4.6.5, FR-4.6.7 · LLD §5.1, §5.4, §5.5. No migration (work_items + links already exist).
+
+### 19.1 Subtask delivery
+
+| Subtask | Status | Notes |
+|---|---|---|
+| M1.T6.1 `qa.py` profile | ✅ | `QAProfile` (test_cases, mid tier, `TestCaseSet`), entry-point registered. **First work-item-producing profile** — `persist_draft` → `PersistResult(work_item_ids=...)`, exercising the `generate_draft → UUID\|None` path from T5. Jinja prompts `qa_{system,user}.j2`. |
+| M1.T6.2 `persist_draft` → work items | ✅ | Creates `test_case` work items via `WorkItemService.create(..., ai_generated=True, source_job_id=job.id)` in the project's initial state; links each to the focus story via `link_type='tests'`. Never approves. |
+| M1.T6.3 Citations validated | ✅ | `TestCase.srs_citations` `min_length=1` + whitespace guard (`MissingCitations`); `MissingFocusStory` guard. |
+
+### 19.2 Decisions / notes
+
+- **`WorkItemService.create` extended** with `*, ai_generated=False, source_job_id=None` — the single place that assigns seq/initial-state/rank now also stamps AI provenance, so §7.5/§7.6 hold without a profile hand-rolling work-item rows.
+- **Link target is the job's focus item, not the LLM's `story_id` (§1.10):** `TestCaseSet.story_id` is accepted but informational — no model-emitted field decides which story the tests attach to. `persist_draft` links to `job.focus_item_id` and raises `MissingFocusStory` if absent.
+- **Mandatory citations (§7.4/T6.3 vs §5.5):** `TestCase.srs_citations` is required non-empty (§5.5 showed it required already; kept strict).
+- **`test_plan` (the QA agent's other artifact)** still routes through `GenericDocumentProfile` (a plain document) — a dedicated `TestPlan` profile is a later refinement; `QAProfile` declares only `test_cases`.
+- **Two Pydantic models named `Test*`** carry `__test__ = False` so pytest doesn't try to collect them.
+
+### 19.3 M1 agent status
+
+Architect (HLD/LLD, documents) and QA (test cases, work items) are the two shipped role profiles; both plug into the profile-driven worker via the `krititva.agents` entry-point group. Remaining M1: **T7 — AI Panel UI** (frontend: job list, live SSE progress, provenance viewer, accept/reject) — parallelizable, no backend blockers.
