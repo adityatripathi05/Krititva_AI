@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import (
@@ -27,6 +27,9 @@ from app.api.errors import (
 )
 from app.engine import key_between
 from app.models import (
+    Document,
+    DocumentChunk,
+    DocumentVersion,
     HierarchyRule,
     LinkType,
     Milestone,
@@ -96,6 +99,9 @@ class WorkItemService:
             milestone_id=payload.milestone_id,
         )
 
+        # Serialize seq/rank allocation per project so concurrent creates don't
+        # collide on uq_work_items_project_seq (→ 500) or mint duplicate ranks.
+        await self._lock_project_allocation(project.id)
         state_id = await self._initial_state_id(project.id)
         seq = await self._next_seq(project.id)
         rank = await self._append_rank(project.id)
@@ -195,6 +201,16 @@ class WorkItemService:
         if state_id is None:  # pragma: no cover - a seeded project always has states
             raise NotFound("not_found")
         return state_id
+
+    async def _lock_project_allocation(self, project_id: uuid.UUID) -> None:
+        """Transaction-scoped advisory lock namespacing seq/rank allocation to a
+        project. Released automatically at commit/rollback; concurrent creates
+        and reranks in the same project serialize instead of racing the
+        read-modify-write of MAX(seq)/MAX(rank)."""
+        await self.db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext('krititva-wi-alloc'), hashtext(:pid))"),
+            {"pid": str(project_id)},
+        )
 
     async def _next_seq(self, project_id: uuid.UUID) -> int:
         stmt = select(func.coalesce(func.max(WorkItem.seq), 0)).where(
@@ -325,6 +341,9 @@ class WorkItemService:
             if link_type is LinkType.derived_from:
                 await self._assert_no_derived_cycle(from_item.id, to_item_id)
 
+        if to_chunk_id is not None:
+            await self._assert_chunk_in_project(project.id, to_chunk_id)
+
         row = WorkItemLink(
             from_item=from_item.id,
             to_item=to_item_id,
@@ -344,6 +363,24 @@ class WorkItemService:
         )
         await self.db.flush()
         return row
+
+    async def _assert_chunk_in_project(self, project_id: uuid.UUID, chunk_id: uuid.UUID) -> None:
+        """Scope a ``to_chunk`` link target to this project (FR-4.1.3, NFR-5.2.8).
+
+        Without this, a member of two projects could link a work item to a chunk
+        in the *other* project; the lineage retrieval would then pull that
+        project's document content into this project's AI context. A foreign or
+        nonexistent chunk resolves to 404, mirroring the ``to_item`` path."""
+        chunk_project = (
+            await self.db.execute(
+                select(Document.project_id)
+                .join(DocumentVersion, DocumentVersion.document_id == Document.id)
+                .join(DocumentChunk, DocumentChunk.version_id == DocumentVersion.id)
+                .where(DocumentChunk.id == chunk_id)
+            )
+        ).scalar_one_or_none()
+        if chunk_project is None or chunk_project != project_id:
+            raise NotFound("not_found")
 
     async def _assert_no_derived_cycle(self, from_id: uuid.UUID, to_id: uuid.UUID) -> None:
         """Reject if ``to_id`` already reaches ``from_id`` via derived_from edges."""
@@ -380,6 +417,7 @@ class WorkItemService:
         after_id: uuid.UUID | None,
         actor_id: uuid.UUID,
     ) -> WorkItem:
+        await self._lock_project_allocation(project.id)
         before_rank = await self._neighbor_rank(project.id, before_id)
         after_rank = await self._neighbor_rank(project.id, after_id)
         try:
